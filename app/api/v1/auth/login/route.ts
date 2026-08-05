@@ -9,12 +9,15 @@ import { publicUser } from "@/lib/auth/guards";
 import { loginSchema } from "@/lib/validations/auth";
 import { prisma } from "@/lib/db/prisma";
 import { writeAuditLog } from "@/lib/audit/logger";
+import { envNumber } from "@/lib/env";
 
 export async function POST(request: Request) {
   try {
     const input = await parseBody(request, loginSchema);
     const metadata = requestMetadata(request);
-    const rate = await enforceRateLimit(`login:${metadata.ipAddress ?? "unknown"}`, 10, 60);
+    const loginLimit = envNumber("LOGIN_RATE_LIMIT", process.env.NODE_ENV === "production" ? 10 : 30);
+    const loginWindowSeconds = envNumber("LOGIN_RATE_WINDOW_SECONDS", 60);
+    const rate = await enforceRateLimit(`login:${metadata.ipAddress ?? "unknown"}`, loginLimit, loginWindowSeconds);
     if (!rate.allowed) throw new ApiError("พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่", 429);
 
     const user = await findUserWithAccess({ username: input.username });
