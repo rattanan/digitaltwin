@@ -167,6 +167,8 @@ async function seedUsers(
         displayName,
         passwordHash,
         isActive: true,
+        failedLoginCount: 0,
+        lockedUntil: null,
         deletedAt: null,
         agencyId: agencies.get(agencyCode),
       },
