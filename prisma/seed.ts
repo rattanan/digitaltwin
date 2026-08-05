@@ -1,5 +1,7 @@
+import "dotenv/config";
 import { createHash } from "node:crypto";
 import { prisma } from "../lib/db/prisma";
+import { serializeJsonText } from "../lib/db/legacy-json";
 import { hashPassword } from "../lib/auth/password";
 import { DEMO_PROVINCE } from "../lib/demo-data";
 import { PERMISSION_DEFINITIONS, ROLE_CODES } from "../lib/permissions/constants";
@@ -195,8 +197,8 @@ async function seedSettings() {
   for (const [settingKey, valueJson, category] of settings) {
     await prisma.systemSetting.upsert({
       where: { settingKey },
-      update: { valueJson, category },
-      create: { id: stableId(`setting:${settingKey}`), settingKey, valueJson, category },
+      update: { valueJson: serializeJsonText(valueJson)!, category },
+      create: { id: stableId(`setting:${settingKey}`), settingKey, valueJson: serializeJsonText(valueJson)!, category },
     });
   }
 }
@@ -500,7 +502,7 @@ async function seedAlerts(provinceId: string, districtIds: string[]) {
         cameraId: index % 4 === 0 ? stableId(`camera:CCTV-SB-${String((index % 20) + 1).padStart(3, "0")}`) : undefined,
         deviceId: index % 3 === 0 ? stableId(`device:WATER-SB-${String((index % 8) + 1).padStart(3, "0")}`) : undefined,
         createdAt: valueAt(DEMO_NOW, index),
-        metadata: { seed: true },
+        metadata: serializeJsonText({ seed: true }),
       },
     });
   }
@@ -559,10 +561,13 @@ async function seedIncidents(provinceId: string, districtIds: string[], alertIds
   }
   await prisma.incidentHistory.deleteMany({ where: { incidentId: { in: ids } } });
   await prisma.incidentHistory.createMany({
-    data: ids.flatMap((incidentId, index) => [
-      { incidentId, status: "DETECTED", note: "ตรวจพบจากข้อมูลสาธิต", createdAt: valueAt(DEMO_NOW, index + 2) },
-      { incidentId, status, note: "สถานะปัจจุบันของรายการสาธิต", createdAt: valueAt(DEMO_NOW, index) },
-    ]),
+    data: ids.flatMap((incidentId, index) => {
+      const currentStatus = incidentSeeds[index][4];
+      return [
+        { incidentId, status: "DETECTED", note: "ตรวจพบจากข้อมูลสาธิต", createdAt: valueAt(DEMO_NOW, index + 2) },
+        { incidentId, status: currentStatus, note: "สถานะปัจจุบันของรายการสาธิต", createdAt: valueAt(DEMO_NOW, index) },
+      ];
+    }),
   });
   return ids;
 }
@@ -655,8 +660,8 @@ async function seedAiData(userIds: string[]) {
     const messageId = stableId(`message:${userId}`);
     await prisma.aiMessage.upsert({
       where: { id: messageId },
-      update: { content: "จังหวัดมี Alert ที่ยังเปิดอยู่ 8 รายการ โดยมี Critical 2 รายการ ข้อมูลนี้เป็นคำตอบสาธิตจากข้อมูล seed", structuredJson: { demo: true, relatedUrl: "/dashboard" } },
-      create: { id: messageId, conversationId, role: "ASSISTANT", content: "จังหวัดมี Alert ที่ยังเปิดอยู่ 8 รายการ โดยมี Critical 2 รายการ ข้อมูลนี้เป็นคำตอบสาธิตจากข้อมูล seed", structuredJson: { demo: true, relatedUrl: "/dashboard" } },
+      update: { content: "จังหวัดมี Alert ที่ยังเปิดอยู่ 8 รายการ โดยมี Critical 2 รายการ ข้อมูลนี้เป็นคำตอบสาธิตจากข้อมูล seed", structuredJson: serializeJsonText({ demo: true, relatedUrl: "/dashboard" }) },
+      create: { id: messageId, conversationId, role: "ASSISTANT", content: "จังหวัดมี Alert ที่ยังเปิดอยู่ 8 รายการ โดยมี Critical 2 รายการ ข้อมูลนี้เป็นคำตอบสาธิตจากข้อมูล seed", structuredJson: serializeJsonText({ demo: true, relatedUrl: "/dashboard" }) },
     });
     await prisma.aiMessageSource.deleteMany({ where: { messageId } });
     await prisma.aiMessageSource.create({ data: { id: stableId(`message-source:${userId}`), messageId, sourceModule: "Dashboard", sourceType: "Alert", sourceName: "Alert Center (demo)", sourceTimestamp: DEMO_NOW, sourceUrl: "/dashboard" } });

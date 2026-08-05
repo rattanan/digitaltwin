@@ -16,12 +16,12 @@ model User {
   passwordHash     String    @map("password_hash") @db.VarChar(255)
   isActive         Boolean   @default(true) @map("is_active")
   failedLoginCount Int       @default(0) @map("failed_login_count")
-  lockedUntil      DateTime? @map("locked_until") @db.DateTime(3)
-  lastLoginAt      DateTime? @map("last_login_at") @db.DateTime(3)
+  lockedUntil      DateTime? @map("locked_until") @db.DateTime
+  lastLoginAt      DateTime? @map("last_login_at") @db.DateTime
   agencyId         String?   @map("agency_id") @db.Char(36)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt        DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt        DateTime? @map("deleted_at") @db.DateTime
 
   agency          Agency?          @relation(fields: [agencyId], references: [id], onDelete: SetNull)
   userRoles       UserRole[]
@@ -44,9 +44,9 @@ model Role {
   nameEn      String    @map("name_en") @db.VarChar(191)
   description String?   @db.VarChar(500)
   isSystem    Boolean   @default(false) @map("is_system")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt   DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt   DateTime? @map("deleted_at") @db.DateTime
 
   userRoles       UserRole[]
   rolePermissions RolePermission[]
@@ -62,8 +62,8 @@ model Permission {
   action    String   @db.VarChar(80)
   nameTh    String   @map("name_th") @db.VarChar(191)
   nameEn    String   @map("name_en") @db.VarChar(191)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime
 
   rolePermissions RolePermission[]
 
@@ -74,7 +74,7 @@ model Permission {
 model UserRole {
   userId    String   @map("user_id") @db.Char(36)
   roleId    String   @map("role_id") @db.Char(36)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -87,7 +87,7 @@ model UserRole {
 model RolePermission {
   roleId       String   @map("role_id") @db.Char(36)
   permissionId String   @map("permission_id") @db.Char(36)
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp
 
   role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
@@ -102,8 +102,8 @@ model UserDataScope {
   userId     String   @map("user_id") @db.Char(36)
   scopeType  String   @map("scope_type") @db.VarChar(40)
   scopeValue String   @map("scope_value") @db.VarChar(120)
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -114,13 +114,13 @@ model UserDataScope {
 model Session {
   id           String    @id @default(uuid()) @db.Char(36)
   userId       String    @map("user_id") @db.Char(36)
-  sessionToken String    @unique @map("session_token") @db.VarChar(255)
+  sessionToken String    @unique @map("session_token") @db.VarChar(191)
   ipAddress    String?   @map("ip_address") @db.VarChar(64)
   userAgent    String?   @map("user_agent") @db.VarChar(500)
-  expiresAt    DateTime  @map("expires_at") @db.DateTime(3)
-  revokedAt    DateTime? @map("revoked_at") @db.DateTime(3)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  expiresAt    DateTime  @map("expires_at") @db.DateTime
+  revokedAt    DateTime? @map("revoked_at") @db.DateTime
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshTokens RefreshToken[]
@@ -134,11 +134,11 @@ model RefreshToken {
   sessionId    String    @map("session_id") @db.Char(36)
   userId       String    @map("user_id") @db.Char(36)
   tokenHash    String    @unique @map("token_hash") @db.Char(64)
-  expiresAt    DateTime  @map("expires_at") @db.DateTime(3)
-  usedAt       DateTime? @map("used_at") @db.DateTime(3)
-  revokedAt    DateTime? @map("revoked_at") @db.DateTime(3)
+  expiresAt    DateTime  @map("expires_at") @db.DateTime
+  usedAt       DateTime? @map("used_at") @db.DateTime
+  revokedAt    DateTime? @map("revoked_at") @db.DateTime
   replacedById String?   @map("replaced_by_id") @db.Char(36)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -159,9 +159,9 @@ model Agency {
   contactPhone String?   @map("contact_phone") @db.VarChar(80)
   contactEmail String?   @map("contact_email") @db.VarChar(191)
   isActive     Boolean   @default(true) @map("is_active")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt    DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt    DateTime? @map("deleted_at") @db.DateTime
 
   users       User[]
   locations   Location[]
@@ -185,9 +185,9 @@ model Province {
   longitude  Decimal?  @db.Decimal(10, 7)
   population Int?
   households Int?
-  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime
 
   districts       District[]
   locations       Location[]
@@ -213,9 +213,9 @@ model District {
   longitude  Decimal?  @db.Decimal(10, 7)
   population Int?
   households Int?
-  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime
 
   province        Province         @relation(fields: [provinceId], references: [id], onDelete: Restrict)
   subdistricts    Subdistrict[]
@@ -243,9 +243,9 @@ model Subdistrict {
   longitude  Decimal?  @db.Decimal(10, 7)
   population Int?
   households Int?
-  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime
 
   district    District     @relation(fields: [districtId], references: [id], onDelete: Restrict)
   villages    Village[]
@@ -272,9 +272,9 @@ model Village {
   longitude     Decimal?  @db.Decimal(10, 7)
   population    Int?
   households    Int?
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime
 
   subdistrict Subdistrict @relation(fields: [subdistrictId], references: [id], onDelete: Restrict)
 
@@ -286,11 +286,11 @@ model Village {
 model SystemSetting {
   id          String   @id @default(uuid()) @db.Char(36)
   settingKey  String   @unique @map("setting_key") @db.VarChar(191)
-  valueJson   Json     @map("value_json")
+  valueJson   String   @map("value_json") @db.LongText
   category    String   @default("system") @db.VarChar(80)
   isPublic    Boolean  @default(false) @map("is_public")
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime
   updatedById String?  @map("updated_by_id") @db.Char(36)
 
   @@index([category])
@@ -307,9 +307,9 @@ model AuditLog {
   requestId  String?  @map("request_id") @db.VarChar(120)
   ipAddress  String?  @map("ip_address") @db.VarChar(64)
   userAgent  String?  @map("user_agent") @db.VarChar(500)
-  beforeData Json?    @map("before_data")
-  afterData  Json?    @map("after_data")
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  beforeData String?  @map("before_data") @db.LongText
+  afterData  String?  @map("after_data") @db.LongText
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
 
   actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
 
@@ -331,10 +331,10 @@ model Location {
   provinceId    String?   @map("province_id") @db.Char(36)
   districtId    String?   @map("district_id") @db.Char(36)
   subdistrictId String?   @map("subdistrict_id") @db.Char(36)
-  metadata      Json?
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+  metadata      String?   @db.LongText
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime
 
   agency      Agency?      @relation(fields: [agencyId], references: [id], onDelete: SetNull)
   province    Province?    @relation(fields: [provinceId], references: [id], onDelete: SetNull)
@@ -358,8 +358,8 @@ model CctvCamera {
   nameEn        String?   @map("name_en") @db.VarChar(191)
   status        String    @db.VarChar(40)
   nfsFolderPath String?   @map("nfs_folder_path") @db.VarChar(500)
-  lastImageAt   DateTime? @map("last_image_at") @db.DateTime(3)
-  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
+  lastImageAt   DateTime? @map("last_image_at") @db.DateTime
+  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime
   latitude      Decimal?  @db.Decimal(10, 7)
   longitude     Decimal?  @db.Decimal(10, 7)
   agencyId      String?   @map("agency_id") @db.Char(36)
@@ -367,10 +367,10 @@ model CctvCamera {
   provinceId    String?   @map("province_id") @db.Char(36)
   districtId    String?   @map("district_id") @db.Char(36)
   subdistrictId String?   @map("subdistrict_id") @db.Char(36)
-  metadata      Json?
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+  metadata      String?   @db.LongText
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime
 
   agency      Agency?        @relation(fields: [agencyId], references: [id], onDelete: SetNull)
   location    Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -391,11 +391,11 @@ model CctvSnapshot {
   id             BigInt    @id @default(autoincrement())
   cameraId       String    @map("camera_id") @db.Char(36)
   imagePath      String    @map("image_path") @db.VarChar(500)
-  capturedAt     DateTime  @map("captured_at") @db.DateTime(3)
-  fileModifiedAt DateTime? @map("file_modified_at") @db.DateTime(3)
+  capturedAt     DateTime  @map("captured_at") @db.DateTime
+  fileModifiedAt DateTime? @map("file_modified_at") @db.DateTime
   fileSizeBytes  BigInt?   @map("file_size_bytes")
-  metadata       Json?
-  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  metadata       String?   @db.LongText
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp
 
   camera    CctvCamera     @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   aiResults CctvAiResult[]
@@ -410,10 +410,10 @@ model CctvAiResult {
   snapshotId   BigInt?  @map("snapshot_id")
   eventType    String   @map("event_type") @db.VarChar(80)
   confidence   Decimal  @db.Decimal(5, 4)
-  detectedAt   DateTime @map("detected_at") @db.DateTime(3)
+  detectedAt   DateTime @map("detected_at") @db.DateTime
   verification String   @default("UNVERIFIED") @db.VarChar(40)
-  metadata     Json?
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  metadata     String?  @db.LongText
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp
 
   camera   CctvCamera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   snapshot CctvSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
@@ -429,8 +429,8 @@ model IotDeviceType {
   nameTh      String   @map("name_th") @db.VarChar(191)
   nameEn      String?  @map("name_en") @db.VarChar(191)
   description String?  @db.VarChar(500)
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime
 
   devices IotDevice[]
   metrics IotMetric[]
@@ -446,17 +446,17 @@ model IotDevice {
   status        String    @db.VarChar(40)
   unit          String?   @db.VarChar(40)
   battery       Decimal?  @db.Decimal(5, 2)
-  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
+  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime
   typeId        String    @map("type_id") @db.Char(36)
   agencyId      String?   @map("agency_id") @db.Char(36)
   locationId    String?   @map("location_id") @db.Char(36)
   provinceId    String?   @map("province_id") @db.Char(36)
   districtId    String?   @map("district_id") @db.Char(36)
   subdistrictId String?   @map("subdistrict_id") @db.Char(36)
-  metadata      Json?
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+  metadata      String?   @db.LongText
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime
 
   type         IotDeviceType    @relation(fields: [typeId], references: [id], onDelete: Restrict)
   agency       Agency?          @relation(fields: [agencyId], references: [id], onDelete: SetNull)
@@ -484,8 +484,8 @@ model IotMetric {
   unit      String?  @db.VarChar(40)
   warning   Decimal? @db.Decimal(20, 6)
   critical  Decimal? @db.Decimal(20, 6)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime
 
   device   IotDevice     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   type     IotDeviceType @relation(fields: [typeId], references: [id], onDelete: Restrict)
@@ -502,9 +502,9 @@ model IotReading {
   metricKey      String   @map("metric_key") @db.VarChar(80)
   value          Decimal  @db.Decimal(20, 6)
   unit           String?  @db.VarChar(40)
-  recordedAt     DateTime @map("recorded_at") @db.DateTime(3)
+  recordedAt     DateTime @map("recorded_at") @db.DateTime
   idempotencyKey String?  @unique @map("idempotency_key") @db.VarChar(191)
-  metadata       Json?
+  metadata       String?  @db.LongText
 
   device IotDevice  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   metric IotMetric? @relation(fields: [metricId], references: [id], onDelete: SetNull)
@@ -519,8 +519,8 @@ model IotLatestValue {
   metricKey  String   @map("metric_key") @db.VarChar(80)
   value      Decimal  @db.Decimal(20, 6)
   unit       String?  @db.VarChar(40)
-  recordedAt DateTime @map("recorded_at") @db.DateTime(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  recordedAt DateTime @map("recorded_at") @db.DateTime
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime
 
   device IotDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
@@ -544,11 +544,11 @@ model Alert {
   locationId     String?   @map("location_id") @db.Char(36)
   cameraId       String?   @map("camera_id") @db.Char(36)
   deviceId       String?   @map("device_id") @db.Char(36)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  acknowledgedAt DateTime? @map("acknowledged_at") @db.DateTime(3)
-  resolvedAt     DateTime? @map("resolved_at") @db.DateTime(3)
-  metadata       Json?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.DateTime
+  acknowledgedAt DateTime? @map("acknowledged_at") @db.DateTime
+  resolvedAt     DateTime? @map("resolved_at") @db.DateTime
+  metadata       String?   @db.LongText
 
   agency      Agency?        @relation(fields: [agencyId], references: [id], onDelete: SetNull)
   province    Province?      @relation(fields: [provinceId], references: [id], onDelete: SetNull)
@@ -571,7 +571,7 @@ model AlertHistory {
   action    String   @db.VarChar(80)
   note      String?  @db.VarChar(1000)
   actorId   String?  @map("actor_id") @db.Char(36)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
 
   alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
 
@@ -588,7 +588,7 @@ model Incident {
   category       String    @db.VarChar(80)
   severity       String    @db.VarChar(40)
   status         String    @db.VarChar(40)
-  dueAt          DateTime? @map("due_at") @db.DateTime(3)
+  dueAt          DateTime? @map("due_at") @db.DateTime
   agencyId       String?   @map("agency_id") @db.Char(36)
   provinceId     String?   @map("province_id") @db.Char(36)
   districtId     String?   @map("district_id") @db.Char(36)
@@ -598,9 +598,9 @@ model Incident {
   deviceId       String?   @map("device_id") @db.Char(36)
   assignedUserId String?   @map("assigned_user_id") @db.Char(36)
   resolution     String?   @db.VarChar(1200)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  closedAt       DateTime? @map("closed_at") @db.DateTime(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.DateTime
+  closedAt       DateTime? @map("closed_at") @db.DateTime
 
   agency        Agency?           @relation(fields: [agencyId], references: [id], onDelete: SetNull)
   province      Province?         @relation(fields: [provinceId], references: [id], onDelete: SetNull)
@@ -624,7 +624,7 @@ model IncidentHistory {
   status     String   @db.VarChar(40)
   note       String?  @db.VarChar(1000)
   actorId    String?  @map("actor_id") @db.Char(36)
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
 
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
@@ -660,11 +660,11 @@ model StatisticValue {
   definitionId String   @map("definition_id") @db.Char(36)
   provinceId   String?  @map("province_id") @db.Char(36)
   districtId   String?  @map("district_id") @db.Char(36)
-  periodStart  DateTime @map("period_start") @db.DateTime(3)
-  periodEnd    DateTime @map("period_end") @db.DateTime(3)
+  periodStart  DateTime @map("period_start") @db.DateTime
+  periodEnd    DateTime @map("period_end") @db.DateTime
   numericValue Decimal? @map("numeric_value") @db.Decimal(20, 6)
-  valueJson    Json?    @map("value_json")
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  valueJson    String?  @map("value_json") @db.LongText
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp
 
   definition StatisticDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
   province   Province?           @relation(fields: [provinceId], references: [id], onDelete: SetNull)
@@ -685,10 +685,10 @@ model News {
   status      String    @db.VarChar(40)
   priority    String    @default("NORMAL") @db.VarChar(40)
   isPinned    Boolean   @default(false) @map("is_pinned")
-  publishedAt DateTime? @map("published_at") @db.DateTime(3)
-  expiresAt   DateTime? @map("expires_at") @db.DateTime(3)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  publishedAt DateTime? @map("published_at") @db.DateTime
+  expiresAt   DateTime? @map("expires_at") @db.DateTime
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime
 
   @@index([status, isPinned, publishedAt])
   @@map("news")
@@ -700,11 +700,11 @@ model AiConversation {
   userId        String    @map("user_id") @db.Char(36)
   title         String    @db.VarChar(191)
   contextModule String?   @map("context_module") @db.VarChar(80)
-  lastMessageAt DateTime? @map("last_message_at") @db.DateTime(3)
+  lastMessageAt DateTime? @map("last_message_at") @db.DateTime
   isPinned      Boolean   @default(false) @map("is_pinned")
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
-  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime
 
   user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages AiMessage[]
@@ -718,9 +718,9 @@ model AiMessage {
   conversationId String   @map("conversation_id") @db.Char(36)
   role           String   @db.VarChar(40)
   content        String   @db.Text
-  structuredJson Json?    @map("structured_json")
+  structuredJson String?  @map("structured_json") @db.LongText
   status         String   @default("COMPLETED") @db.VarChar(40)
-  createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp
 
   conversation AiConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sources      AiMessageSource[]
@@ -735,9 +735,9 @@ model AiMessageSource {
   sourceModule    String    @map("source_module") @db.VarChar(80)
   sourceType      String    @map("source_type") @db.VarChar(80)
   sourceName      String    @map("source_name") @db.VarChar(191)
-  sourceTimestamp DateTime? @map("source_timestamp") @db.DateTime(3)
+  sourceTimestamp DateTime? @map("source_timestamp") @db.DateTime
   sourceUrl       String?   @map("source_url") @db.VarChar(500)
-  metadata        Json?
+  metadata        String?   @db.LongText
 
   message AiMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
@@ -752,7 +752,7 @@ model AiSuggestedQuestion {
   questionEn String?  @map("question_en") @db.VarChar(500)
   sortOrder  Int      @default(0) @map("sort_order")
   isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
 
   @@index([module, isActive, sortOrder])
   @@map("ai_suggested_questions")

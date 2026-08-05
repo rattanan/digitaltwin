@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { serializeJsonText } from "@/lib/db/legacy-json";
 
 type AuditInput = {
   actorId?: string;
@@ -25,8 +26,8 @@ export async function writeAuditLog(input: AuditInput) {
         requestId: input.requestId,
         ipAddress: input.ipAddress,
         userAgent: input.userAgent,
-        beforeData: input.beforeData as never,
-        afterData: input.afterData as never,
+        beforeData: serializeJsonText(input.beforeData),
+        afterData: serializeJsonText(input.afterData),
       },
     });
   } catch (error) {

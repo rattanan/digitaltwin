@@ -16,7 +16,7 @@
 ## ข้อกำหนดเครื่องมือ
 
 - Node.js 22+
-- MariaDB 11 หรือ MySQL 8
+- MariaDB 5.5 (compatibility path) หรือ MariaDB 11 / MySQL 8
 - Redis เป็น optional สำหรับ development และควรมีใน production
 - ไม่ต้องใช้ Docker สำหรับ workflow นี้; service endpoints อ่านจาก `.env`
 
@@ -29,11 +29,13 @@ cp .env.example .env
 
 แก้ `DATABASE_URL`, secrets และ seed passwords ใน `.env` จากนั้นสร้าง database `digitaltwin` ใน MariaDB/MySQL และตรวจว่าบัญชีมีสิทธิ์สร้างตารางและ migration
 
+ถ้า password ใน `DATABASE_URL` มีอักขระพิเศษ เช่น `@` ต้อง URL-encode (`@` เป็น `%40`) และใช้รูปแบบ `username:password@host` เสมอ
+
 ## Database commands
 
 ```bash
 npm run db:generate
-npm run db:migrate:dev -- --name foundation
+# ใช้คำสั่งนี้สำหรับ MariaDB 5.5 และใช้ได้กับ MariaDB รุ่นใหม่ด้วย
 npm run db:migrate:deploy
 
 # Seed เฉพาะ foundation
@@ -47,6 +49,8 @@ npm run db:seed:reset
 
 npm run db:studio
 ```
+
+`db:migrate:deploy` จะเตรียมตาราง migration ledger แบบที่ MariaDB 5.5 รองรับก่อนเรียก Prisma และใช้ migration ที่ตัด `JSON`/fractional `DATETIME` ออกแล้ว โดยข้อมูล JSON ของระบบเก็บเป็น JSON text ใน `LONGTEXT` และเวลามีความละเอียดระดับวินาที สำหรับฐานข้อมูลรุ่นใหม่ที่ต้องการใช้ Prisma migration ตรง ๆ ให้ใช้ `npm run db:migrate:deploy:modern`
 
 `db:seed:minimal` สร้าง roles, permissions, system settings และ Super Admin ส่วน `db:seed:demo` เพิ่มข้อมูลสาธิตจังหวัดสิงห์บุรีสำหรับ dashboard, CCTV metadata, IoT readings, alerts, incidents, statistics, news และ AI conversation records โดยไม่เรียก external AI API
 
