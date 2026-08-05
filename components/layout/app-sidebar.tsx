@@ -11,10 +11,10 @@ type NavItem = { label: string; href: string; icon: LucideIcon; disabled?: boole
 
 const navigation: { label: string; items: NavItem[] }[] = [
   { label: "ภาพรวมเมือง", items: [{ label: "ศูนย์บัญชาการ", href: "/dashboard", icon: LayoutDashboard }] },
-  { label: "ข้อมูลเชิงพื้นที่", items: [{ label: "แผนที่เมือง", href: "/map", icon: Map, disabled: true }, { label: "พื้นที่ปกครอง", href: "/admin/areas", icon: Database }] },
-  { label: "โครงสร้างพื้นฐาน", items: [{ label: "CCTV", href: "/cctv", icon: Camera, disabled: true, badge: "Phase 3" }, { label: "อุปกรณ์ IoT", href: "/iot", icon: RadioTower, disabled: true, badge: "Phase 4" }] },
-  { label: "การปฏิบัติการ", items: [{ label: "ศูนย์แจ้งเตือน", href: "/alerts", icon: BellRing, disabled: true, badge: "Phase 5" }, { label: "จัดการเหตุการณ์", href: "/incidents", icon: Siren, disabled: true, badge: "Phase 5" }] },
-  { label: "การวิเคราะห์", items: [{ label: "AI Copilot", href: "/ai", icon: Bot, disabled: true, badge: "Phase 6" }, { label: "รายงาน", href: "/reports", icon: FileBarChart, disabled: true, badge: "Phase 8" }] },
+  { label: "ข้อมูลเชิงพื้นที่", items: [{ label: "แผนที่เมือง", href: "/map", icon: Map }, { label: "พื้นที่ปกครอง", href: "/admin/areas", icon: Database }] },
+  { label: "โครงสร้างพื้นฐาน", items: [{ label: "CCTV", href: "/cctv", icon: Camera }, { label: "อุปกรณ์ IoT", href: "/iot", icon: RadioTower }] },
+  { label: "การปฏิบัติการ", items: [{ label: "ศูนย์แจ้งเตือน", href: "/alerts", icon: BellRing }, { label: "จัดการเหตุการณ์", href: "/incidents", icon: Siren }] },
+  { label: "การวิเคราะห์", items: [{ label: "AI Copilot", href: "/ai", icon: Bot }, { label: "รายงาน", href: "/reports", icon: FileBarChart, disabled: true, badge: "Phase 8" }] },
   { label: "การบริหารระบบ", items: [{ label: "ผู้ใช้งาน", href: "/admin/users", icon: Users }, { label: "บทบาทและสิทธิ์", href: "/admin/roles", icon: ShieldCheck }, { label: "หน่วยงาน", href: "/admin/agencies", icon: Building2 }, { label: "ตั้งค่าระบบ", href: "/admin/settings", icon: Settings2, disabled: true }] },
 ];
 

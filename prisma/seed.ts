@@ -26,11 +26,11 @@ const rolePermissions: Record<string, string[]> = {
   SUPER_ADMIN: PERMISSION_DEFINITIONS.map(([code]) => code),
   PROVINCIAL_ADMIN: PERMISSION_DEFINITIONS.filter(([code]) => code !== "settings.manage").map(([code]) => code),
   AGENCY_ADMIN: ["dashboard.read", "users.read", "users.create", "users.update", "agencies.read", "areas.read"],
-  COMMAND_CENTER_OPERATOR: ["dashboard.read", "alerts.read", "incidents.read"],
+  COMMAND_CENTER_OPERATOR: ["dashboard.read", "alerts.read", "alerts.manage", "incidents.read", "incidents.manage", "ai.read", "ai.use"],
   CCTV_OPERATOR: ["dashboard.read", "cctv.read", "cctv.manage"],
   IOT_OPERATOR: ["dashboard.read", "iot.read", "iot.manage"],
-  ANALYST: ["dashboard.read", "areas.read", "exports.create"],
-  EXECUTIVE: ["dashboard.read", "areas.read", "exports.create"],
+  ANALYST: ["dashboard.read", "areas.read", "exports.create", "ai.read", "ai.use"],
+  EXECUTIVE: ["dashboard.read", "areas.read", "exports.create", "ai.read", "ai.use"],
   VIEWER: ["dashboard.read", "areas.read", "agencies.read"],
 };
 

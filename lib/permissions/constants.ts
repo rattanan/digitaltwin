@@ -15,7 +15,11 @@ export type RoleCode = (typeof ROLE_CODES)[number];
 export const PERMISSION_DEFINITIONS = [
   ["dashboard.read", "dashboard", "read", "ดูแดชบอร์ด", "View dashboard"],
   ["alerts.read", "alerts", "read", "ดูการแจ้งเตือน", "View alerts"],
+  ["alerts.manage", "alerts", "manage", "จัดการการแจ้งเตือน", "Manage alerts"],
   ["incidents.read", "incidents", "read", "ดูเหตุการณ์", "View incidents"],
+  ["incidents.manage", "incidents", "manage", "จัดการเหตุการณ์", "Manage incidents"],
+  ["ai.read", "ai", "read", "ดู AI Copilot", "View AI Copilot"],
+  ["ai.use", "ai", "use", "ใช้งาน AI Copilot", "Use AI Copilot"],
   ["cctv.read", "cctv", "read", "ดูกล้อง CCTV", "View CCTV"],
   ["cctv.manage", "cctv", "manage", "จัดการกล้อง CCTV", "Manage CCTV"],
   ["iot.read", "iot", "read", "ดูอุปกรณ์ IoT", "View IoT"],
