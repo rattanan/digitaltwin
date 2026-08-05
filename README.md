@@ -17,7 +17,7 @@
 
 - Node.js 22+
 - MariaDB 5.5 (compatibility path) หรือ MariaDB 11 / MySQL 8
-- Redis เป็น optional สำหรับ development และควรมีใน production
+- Login rate limiting ใช้ in-process memory จึงไม่ต้องใช้ Redis; production ที่รันหลาย instance ควรมี shared rate limiter ที่ gateway หรือ service layer
 - ไม่ต้องใช้ Docker สำหรับ workflow นี้; service endpoints อ่านจาก `.env`
 
 ## ติดตั้งและตั้งค่า
@@ -98,7 +98,7 @@ app/(auth)                 public login
 app/(protected)            authenticated shell and pages
 app/api/v1                 versioned Route Handlers
 components                 UI primitives, shell, dashboard, admin panels
-lib                        auth, Prisma, Redis, API, audit and query services
+lib                        auth, Prisma, rate limiting, API, audit and query services
 prisma/schema.prisma       MariaDB/MySQL data model
 prisma/migrations          initial foundation migration
 prisma/seed.ts             minimal/demo/reset seed commands

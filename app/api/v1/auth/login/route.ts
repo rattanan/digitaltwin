@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiError, handleApiError, parseBody } from "@/lib/api/http";
-import { enforceRateLimit } from "@/lib/cache/redis";
+import { enforceRateLimit } from "@/lib/cache/rate-limit";
 import { findUserWithAccess, isLocked } from "@/lib/auth/access";
 import { setAuthCookies } from "@/lib/auth/cookies";
 import { createAuthSession, requestMetadata } from "@/lib/auth/session";
