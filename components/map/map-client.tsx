@@ -33,8 +33,8 @@ type MapFeature = {
 
 type SortMode = "name" | "status" | "type";
 
-const mapStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || "https://demotiles.maplibre.org/style.json";
-const mapWorkerUrl = process.env.NEXT_PUBLIC_MAP_WORKER_URL?.trim() || "https://unpkg.com/maplibre-gl@6.1.0/dist/maplibre-gl-worker.mjs";
+const configuredMapStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || "";
+const mapWorkerUrl = process.env.NEXT_PUBLIC_MAP_WORKER_URL?.trim() || "/maplibre/maplibre-gl-worker.mjs";
 
 const fallbackMapStyle: StyleSpecification = {
   version: 8,
@@ -51,6 +51,8 @@ const fallbackMapStyle: StyleSpecification = {
     { id: "openstreetmap", type: "raster", source: "openstreetmap", paint: { "raster-opacity": 0.78 } },
   ],
 };
+
+const initialMapStyle: string | StyleSpecification = configuredMapStyle || fallbackMapStyle;
 
 const layerOptions: { id: MapLayerId; label: string; color: string }[] = [
   { id: "districts", label: "อำเภอ", color: "bg-cyan-300" },
@@ -235,7 +237,7 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
     let disposed = false;
     let map: MapLibreMap | null = null;
     let hasLoaded = false;
-    let fallbackActive = false;
+    let fallbackActive = !configuredMapStyle;
     let loadTimeout: number | undefined;
 
     const markMapReady = () => {
@@ -268,7 +270,7 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
         maplibre.setWorkerUrl(mapWorkerUrl);
         map = new maplibre.Map({
           container: mapContainerRef.current,
-          style: mapStyle,
+          style: initialMapStyle,
           center: snapshot.province.center,
           zoom: 10.5,
           minZoom: 7,
@@ -286,7 +288,10 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
         map.on("error", (event) => {
           if (disposed || hasLoaded || !event.error) return;
           if (!fallbackActive) activateFallbackStyle("ไม่สามารถโหลดแผนที่พื้นฐานได้");
-          else setMapLoading(false);
+          else {
+            setMapLoading(false);
+            setMapError(event.error.message || "ไม่สามารถโหลดแผนที่พื้นฐานได้");
+          }
         });
         loadTimeout = window.setTimeout(() => {
           if (!hasLoaded && !fallbackActive) activateFallbackStyle("โหลดแผนที่พื้นฐานนานเกินไป");
