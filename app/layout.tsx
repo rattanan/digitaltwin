@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Digital Twin – Intelligent City Platform",
+  title: "Digital Twin – Intelligence City Platform | NT",
   description: "ศูนย์บัญชาการเมืองอัจฉริยะจังหวัดสิงห์บุรี",
 };
 
@@ -12,7 +12,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="th"
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col bg-[#07111f]">{children}</body>
+      <body className="min-h-full flex flex-col bg-[var(--background-primary)]">{children}</body>
     </html>
   );
 }
