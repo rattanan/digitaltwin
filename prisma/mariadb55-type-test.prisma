@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/mariadb55-type-test"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model TypeTest {
+  id        String   @id @db.Char(36)
+  createdAt DateTime @default(now()) @db.Timestamp
+  updatedAt DateTime @updatedAt @db.DateTime
+  happened  DateTime? @db.DateTime
+  payload   String?  @db.LongText
+}
