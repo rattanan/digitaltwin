@@ -1,5 +1,5 @@
 import { DEMO_PROVINCE } from "@/lib/demo-data";
-import type { MapSnapshot } from "@/lib/map/types";
+import type { CommandMapFeature, MapSnapshot } from "@/lib/map/types";
 
 const districtSeeds = [
   ["1701", "เมืองสิงห์บุรี", "Mueang Sing Buri", 14.865, 100.285],
@@ -31,7 +31,9 @@ const cameraStatuses = [
   ["ONLINE", "ออนไลน์"] as const,
 ] as const;
 
-export function createDemoMapSnapshot(includeCameras = false): MapSnapshot {
+type DemoCommandCapabilities = { iot?: boolean; alerts?: boolean; incidents?: boolean };
+
+export function createDemoMapSnapshot(includeCameras = false, command: DemoCommandCapabilities = {}): MapSnapshot {
   const districts = districtSeeds.map(([code, nameTh, nameEn, latitude, longitude]) => ({
       id: `demo-district-${code}`,
       code,
@@ -71,8 +73,9 @@ export function createDemoMapSnapshot(includeCameras = false): MapSnapshot {
     statusLabel,
     latitude,
     longitude,
-    parentName: DEMO_PROVINCE.nameTh,
-    lastSeenAt: null,
+      parentName: DEMO_PROVINCE.nameTh,
+      districtId: null,
+      lastSeenAt: null,
   }));
 
   const cameras = Array.from({ length: 20 }, (_, index) => {
@@ -90,11 +93,63 @@ export function createDemoMapSnapshot(includeCameras = false): MapSnapshot {
       latitude: 14.76 + index * 0.009,
       longitude: 100.31 + index * 0.006,
       parentName: DEMO_PROVINCE.nameTh,
+      districtId: districts[index % districts.length]?.id ?? null,
       lastSeenAt: "2026-08-05T13:00:00.000Z",
     };
   });
 
   const markers = includeCameras ? [...locations, ...cameras] : locations;
+  const locationFeatures: CommandMapFeature[] = locations.map((location) => ({
+    id: location.id,
+    kind: "LOCATION",
+    code: location.code,
+    coordinates: [location.longitude, location.latitude],
+    districtId: location.districtId,
+    districtName: location.parentName,
+    title: location.title,
+    categoryLabel: location.categoryLabel,
+    status: location.status,
+    statusLabel: location.statusLabel,
+    lastUpdatedAt: null,
+    summary: location.category === "RISK_AREA" ? "พื้นที่ตัวอย่างที่ต้องติดตามสถานการณ์อย่างใกล้ชิด" : `${location.categoryLabel}ในจังหวัดสิงห์บุรี`,
+    metrics: [],
+    destinationHref: `/map?feature=marker:${location.id}`,
+  }));
+  const cameraFeatures: CommandMapFeature[] = includeCameras ? cameras.map((camera) => ({
+    id: camera.id,
+    kind: "CCTV",
+    code: camera.code,
+    coordinates: [camera.longitude, camera.latitude],
+    districtId: camera.districtId,
+    districtName: camera.parentName,
+    title: camera.title,
+    categoryLabel: camera.categoryLabel,
+    status: camera.status,
+    statusLabel: camera.statusLabel,
+    lastUpdatedAt: camera.lastSeenAt,
+    summary: "กล้องวงจรปิดสำหรับติดตามสถานการณ์และเหตุการณ์จาก AI",
+    metrics: [],
+    destinationHref: `/cctv?camera=${camera.id}`,
+  })) : [];
+  const iotFeatures: CommandMapFeature[] = command.iot ? [
+    ["demo-iot-water", "WATER-SB-001", "สถานีวัดระดับน้ำ C7.A", 100.365, 14.914, "ระดับน้ำ", 12.4, "เมตร", "WARNING"],
+    ["demo-iot-air", "AIR-SB-001", "สถานีตรวจวัดคุณภาพอากาศ", 100.401, 14.892, "PM2.5", 38, "µg/m³", "NORMAL"],
+    ["demo-iot-rain", "RAIN-SB-001", "สถานีวัดปริมาณฝนพรหมบุรี", 100.439, 14.874, "ฝนสะสม", 42, "มม.", "WARNING"],
+  ].map(([id, code, title, longitude, latitude, label, value, unit, state]) => ({
+    id: String(id), kind: "IOT" as const, code: String(code), coordinates: [Number(longitude), Number(latitude)] as [number, number], districtId: null, districtName: DEMO_PROVINCE.nameTh,
+    title: String(title), categoryLabel: "อุปกรณ์ IoT", status: state as "NORMAL" | "WARNING", statusLabel: state === "WARNING" ? "เฝ้าระวัง" : "ออนไลน์", lastUpdatedAt: "2026-08-05T13:00:00.000Z",
+    summary: "ข้อมูล telemetry ล่าสุดจากสถานีตรวจวัด", metrics: [{ key: String(label), label: String(label), value: Number(value), unit: String(unit), state: state as "NORMAL" | "WARNING" }], destinationHref: `/iot?device=${id}`,
+  })) : [];
+  const alertFeatures: CommandMapFeature[] = command.alerts ? [
+    { id: "demo-alert-water", code: "ALT-SB-001", title: "ระดับน้ำเพิ่มขึ้นต่อเนื่อง", coordinates: [100.365, 14.914] as [number, number], status: "CRITICAL" as const, label: "วิกฤต" },
+    { id: "demo-alert-camera", code: "ALT-SB-002", title: "กล้องขาดการเชื่อมต่อ", coordinates: [100.412, 14.886] as [number, number], status: "WARNING" as const, label: "เฝ้าระวัง" },
+  ].map((item) => ({ ...item, kind: "ALERT" as const, districtId: null, districtName: DEMO_PROVINCE.nameTh, categoryLabel: "การแจ้งเตือน", statusLabel: item.label, lastUpdatedAt: "2026-08-05T13:05:00.000Z", summary: "สัญญาณที่ยังต้องรับทราบและติดตาม", metrics: [], destinationHref: `/alerts?alert=${item.id}` })) : [];
+  const incidentFeatures: CommandMapFeature[] = command.incidents ? [{
+    id: "demo-incident-flood", kind: "INCIDENT" as const, code: "INC-SB-001", coordinates: [100.451, 14.93] as [number, number], districtId: null, districtName: DEMO_PROVINCE.nameTh,
+    title: "ติดตามจุดเสี่ยงน้ำท่วม", categoryLabel: "เหตุการณ์", status: "CRITICAL" as const, statusLabel: "กำลังดำเนินการ", lastUpdatedAt: "2026-08-05T13:10:00.000Z",
+    summary: "เหตุการณ์ที่เปิด workflow เพื่อประสานงานหน่วยงาน", metrics: [], destinationHref: "/incidents?incident=demo-incident-flood",
+  }] : [];
+  const commandFeatures = [...locationFeatures, ...iotFeatures, ...cameraFeatures, ...alertFeatures, ...incidentFeatures];
   return {
     province: {
       id: "demo-province-17",
@@ -105,14 +160,19 @@ export function createDemoMapSnapshot(includeCameras = false): MapSnapshot {
     },
     areas,
     markers,
+    commandFeatures,
+    boundary: { url: "/data/sing-buri-districts.v1.geojson", version: "v1-2019", attribution: "geoBoundaries · Royal Thai Survey Department · OCHA ROAP (CC BY 3.0 IGO)" },
     bounds: [100.27, 14.75, 100.51, 14.95],
     counts: {
       districts: 6,
       subdistricts: DEMO_PROVINCE.subdistricts,
       locations: locations.length,
       cameras: includeCameras ? cameras.length : 0,
+      iot: iotFeatures.length,
+      alerts: alertFeatures.length,
+      incidents: incidentFeatures.length,
     },
-    capabilities: { cameras: includeCameras },
+    capabilities: { cameras: includeCameras, iot: Boolean(command.iot), alerts: Boolean(command.alerts), incidents: Boolean(command.incidents) },
     freshness: new Date().toISOString(),
     isDemo: true,
   };
