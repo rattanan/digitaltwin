@@ -5,8 +5,9 @@ import { getIncidentOverview } from "@/lib/operations/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function IncidentsPage() {
+export default async function IncidentsPage({ searchParams }: { searchParams: Promise<{ incident?: string }> }) {
   const auth = await requirePageAuth("incidents.read");
+  const params = await searchParams;
   const overview = await getIncidentOverview({ limit: 100 });
-  return <IncidentCenterClient initialData={overview} canManage={hasPermission(auth.user, "incidents.manage")} />;
+  return <IncidentCenterClient initialData={overview} canManage={hasPermission(auth.user, "incidents.manage")} initialSelectedId={params.incident ?? null} />;
 }

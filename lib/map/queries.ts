@@ -15,6 +15,7 @@ const boundary = {
   version: "v1-2019",
   attribution: "geoBoundaries · Royal Thai Survey Department · OCHA ROAP (CC BY 3.0 IGO)",
 };
+const singBuriBoundaryBounds: [number, number, number, number] = [100.182456714, 14.721096421, 100.488093388, 15.120522984];
 
 const categoryLabels: Record<string, string> = {
   GOVERNMENT: "หน่วยงานรัฐ",
@@ -68,6 +69,7 @@ function pointFromRelations(value: {
   location?: { latitude: unknown; longitude: unknown } | null;
   camera?: { latitude: unknown; longitude: unknown } | null;
   device?: { location?: { latitude: unknown; longitude: unknown } | null } | null;
+  district?: { latitude: unknown; longitude: unknown } | null;
 }) {
   return value.location
     ? coordinate(value.location.latitude, value.location.longitude)
@@ -75,7 +77,9 @@ function pointFromRelations(value: {
       ? coordinate(value.camera.latitude, value.camera.longitude)
       : value.device?.location
         ? coordinate(value.device.location.latitude, value.device.location.longitude)
-        : null;
+        : value.district
+          ? coordinate(value.district.latitude, value.district.longitude)
+          : null;
 }
 
 export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<MapSnapshot> {
@@ -116,10 +120,10 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
         : Promise.resolve([]),
       includeIot
         ? prisma.iotDevice.findMany({
-            where: { provinceId: province.id, deletedAt: null, location: { is: { deletedAt: null } } },
+            where: { provinceId: province.id, deletedAt: null },
             select: {
               id: true, deviceCode: true, nameTh: true, status: true, lastHeartbeat: true,
-              type: { select: { nameTh: true } }, district: { select: { id: true, nameTh: true } },
+              type: { select: { nameTh: true } }, district: { select: { id: true, nameTh: true, latitude: true, longitude: true } },
               location: { select: { nameTh: true, latitude: true, longitude: true } },
               metrics: { select: { metricKey: true, nameTh: true, unit: true, warning: true, critical: true } },
               latestValues: { select: { metricKey: true, value: true, unit: true, recordedAt: true } },
@@ -132,7 +136,7 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
             where: { provinceId: province.id, status: { notIn: ["RESOLVED", "DISMISSED"] } },
             select: {
               id: true, publicId: true, title: true, description: true, severity: true, status: true, updatedAt: true,
-              district: { select: { id: true, nameTh: true } },
+              district: { select: { id: true, nameTh: true, latitude: true, longitude: true } },
               location: { select: { latitude: true, longitude: true } },
               camera: { select: { latitude: true, longitude: true } },
               device: { select: { location: { select: { latitude: true, longitude: true } } } },
@@ -145,7 +149,7 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
             where: { provinceId: province.id, status: { notIn: ["RESOLVED", "CLOSED"] } },
             select: {
               id: true, incidentNo: true, title: true, description: true, category: true, severity: true, status: true, updatedAt: true,
-              district: { select: { id: true, nameTh: true } },
+              district: { select: { id: true, nameTh: true, latitude: true, longitude: true } },
               location: { select: { latitude: true, longitude: true } },
               camera: { select: { latitude: true, longitude: true } },
               device: { select: { location: { select: { latitude: true, longitude: true } } } },
@@ -228,8 +232,11 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
     }));
 
     commandFeatures.push(...devices.flatMap((device) => {
-      if (!device.location) return [];
-      const point = coordinate(device.location.latitude, device.location.longitude);
+      const point = device.location
+        ? coordinate(device.location.latitude, device.location.longitude)
+        : device.district
+          ? coordinate(device.district.latitude, device.district.longitude)
+          : null;
       if (!point) return [];
       const latestByKey = new Map(device.latestValues.map((latest) => [latest.metricKey, latest]));
       const metrics: CommandMapMetric[] = device.metrics.flatMap((metric) => {
@@ -247,7 +254,7 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
         id: device.id, kind: "IOT" as const, code: device.deviceCode, coordinates: [point.longitude, point.latitude] as [number, number],
         districtId: device.district?.id ?? null, districtName: device.district?.nameTh ?? null, title: device.nameTh, categoryLabel: device.type.nameTh,
         status, statusLabel: labels[status], lastUpdatedAt: device.lastHeartbeat?.toISOString() ?? device.latestValues[0]?.recordedAt.toISOString() ?? null,
-        summary: `ข้อมูล telemetry จาก ${device.location.nameTh}`, metrics: metrics.slice(0, 3), destinationHref: `/iot?device=${device.id}`,
+        summary: device.location ? `ข้อมูล telemetry จาก ${device.location.nameTh}` : `ข้อมูล telemetry ระบุตำแหน่งโดยประมาณจากศูนย์กลาง${device.district?.nameTh ?? "พื้นที่"}`, metrics: metrics.slice(0, 3), destinationHref: `/iot?device=${device.id}`,
       }];
     }));
 
@@ -270,7 +277,8 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
       ? { latitude: areas.reduce((total, area) => total + area.latitude, 0) / areas.length, longitude: areas.reduce((total, area) => total + area.longitude, 0) / areas.length }
       : { latitude: 14.89, longitude: 100.4 };
     const center = provincePoint ?? fallbackCenter;
-    const bounds = getBounds([...areas, ...markers]);
+    const dataBounds = getBounds([...areas, ...markers]);
+    const bounds = province.code === "17" ? singBuriBoundaryBounds : dataBounds;
 
     return {
       province: { id: province.id, code: province.code, nameTh: province.nameTh, nameEn: province.nameEn, center: [center.longitude, center.latitude] },

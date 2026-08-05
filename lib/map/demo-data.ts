@@ -61,7 +61,7 @@ export function createDemoMapSnapshot(includeCameras = false, command: DemoComma
   });
   const areas = [...districts, ...subdistricts];
 
-  const locations = locationSeeds.map(([code, title, subtitle, category, categoryLabel, latitude, longitude, statusLabel]) => ({
+  const locations = locationSeeds.map(([code, title, subtitle, category, categoryLabel, latitude, longitude, statusLabel], index) => ({
     id: `demo-location-${code}`,
     kind: "LOCATION" as const,
     code,
@@ -74,7 +74,7 @@ export function createDemoMapSnapshot(includeCameras = false, command: DemoComma
     latitude,
     longitude,
       parentName: DEMO_PROVINCE.nameTh,
-      districtId: null,
+      districtId: districts[index % districts.length]?.id ?? null,
       lastSeenAt: null,
   }));
 
@@ -132,22 +132,22 @@ export function createDemoMapSnapshot(includeCameras = false, command: DemoComma
     destinationHref: `/cctv?camera=${camera.id}`,
   })) : [];
   const iotFeatures: CommandMapFeature[] = command.iot ? [
-    ["demo-iot-water", "WATER-SB-001", "สถานีวัดระดับน้ำ C7.A", 100.365, 14.914, "ระดับน้ำ", 12.4, "เมตร", "WARNING"],
-    ["demo-iot-air", "AIR-SB-001", "สถานีตรวจวัดคุณภาพอากาศ", 100.401, 14.892, "PM2.5", 38, "µg/m³", "NORMAL"],
-    ["demo-iot-rain", "RAIN-SB-001", "สถานีวัดปริมาณฝนพรหมบุรี", 100.439, 14.874, "ฝนสะสม", 42, "มม.", "WARNING"],
-  ].map(([id, code, title, longitude, latitude, label, value, unit, state]) => ({
-    id: String(id), kind: "IOT" as const, code: String(code), coordinates: [Number(longitude), Number(latitude)] as [number, number], districtId: null, districtName: DEMO_PROVINCE.nameTh,
+    ["demo-device-001", "WATER-SB-001", "สถานีวัดระดับน้ำ C7.A", 100.365, 14.914, "ระดับน้ำ", 12.4, "เมตร", "WARNING"],
+    ["demo-device-008", "AIR-SB-001", "สถานีตรวจวัดคุณภาพอากาศ", 100.401, 14.892, "PM2.5", 38, "µg/m³", "NORMAL"],
+    ["demo-device-013", "RAIN-SB-001", "สถานีวัดปริมาณฝนพรหมบุรี", 100.439, 14.874, "ฝนสะสม", 42, "มม.", "WARNING"],
+  ].map(([id, code, title, longitude, latitude, label, value, unit, state], index) => ({
+    id: String(id), kind: "IOT" as const, code: String(code), coordinates: [Number(longitude), Number(latitude)] as [number, number], districtId: districts[index % districts.length]?.id ?? null, districtName: districts[index % districts.length]?.nameTh ?? DEMO_PROVINCE.nameTh,
     title: String(title), categoryLabel: "อุปกรณ์ IoT", status: state as "NORMAL" | "WARNING", statusLabel: state === "WARNING" ? "เฝ้าระวัง" : "ออนไลน์", lastUpdatedAt: "2026-08-05T13:00:00.000Z",
     summary: "ข้อมูล telemetry ล่าสุดจากสถานีตรวจวัด", metrics: [{ key: String(label), label: String(label), value: Number(value), unit: String(unit), state: state as "NORMAL" | "WARNING" }], destinationHref: `/iot?device=${id}`,
   })) : [];
   const alertFeatures: CommandMapFeature[] = command.alerts ? [
-    { id: "demo-alert-water", code: "ALT-SB-001", title: "ระดับน้ำเพิ่มขึ้นต่อเนื่อง", coordinates: [100.365, 14.914] as [number, number], status: "CRITICAL" as const, label: "วิกฤต" },
-    { id: "demo-alert-camera", code: "ALT-SB-002", title: "กล้องขาดการเชื่อมต่อ", coordinates: [100.412, 14.886] as [number, number], status: "WARNING" as const, label: "เฝ้าระวัง" },
-  ].map((item) => ({ ...item, kind: "ALERT" as const, districtId: null, districtName: DEMO_PROVINCE.nameTh, categoryLabel: "การแจ้งเตือน", statusLabel: item.label, lastUpdatedAt: "2026-08-05T13:05:00.000Z", summary: "สัญญาณที่ยังต้องรับทราบและติดตาม", metrics: [], destinationHref: `/alerts?alert=${item.id}` })) : [];
+    { id: "demo-alert-001", code: "ALT-SB-001", title: "ระดับน้ำเพิ่มขึ้นต่อเนื่อง", coordinates: [100.365, 14.914] as [number, number], status: "CRITICAL" as const, label: "วิกฤต" },
+    { id: "demo-alert-002", code: "ALT-SB-002", title: "กล้องขาดการเชื่อมต่อ", coordinates: [100.412, 14.886] as [number, number], status: "WARNING" as const, label: "เฝ้าระวัง" },
+  ].map((item, index) => ({ ...item, kind: "ALERT" as const, districtId: districts[index % districts.length]?.id ?? null, districtName: districts[index % districts.length]?.nameTh ?? DEMO_PROVINCE.nameTh, categoryLabel: "การแจ้งเตือน", statusLabel: item.label, lastUpdatedAt: "2026-08-05T13:05:00.000Z", summary: "สัญญาณที่ยังต้องรับทราบและติดตาม", metrics: [], destinationHref: `/alerts?alert=${item.id}` })) : [];
   const incidentFeatures: CommandMapFeature[] = command.incidents ? [{
-    id: "demo-incident-flood", kind: "INCIDENT" as const, code: "INC-SB-001", coordinates: [100.451, 14.93] as [number, number], districtId: null, districtName: DEMO_PROVINCE.nameTh,
+    id: "demo-incident-001", kind: "INCIDENT" as const, code: "INC-SB-001", coordinates: [100.451, 14.93] as [number, number], districtId: districts[5]?.id ?? null, districtName: districts[5]?.nameTh ?? DEMO_PROVINCE.nameTh,
     title: "ติดตามจุดเสี่ยงน้ำท่วม", categoryLabel: "เหตุการณ์", status: "CRITICAL" as const, statusLabel: "กำลังดำเนินการ", lastUpdatedAt: "2026-08-05T13:10:00.000Z",
-    summary: "เหตุการณ์ที่เปิด workflow เพื่อประสานงานหน่วยงาน", metrics: [], destinationHref: "/incidents?incident=demo-incident-flood",
+    summary: "เหตุการณ์ที่เปิด workflow เพื่อประสานงานหน่วยงาน", metrics: [], destinationHref: "/incidents?incident=demo-incident-001",
   }] : [];
   const commandFeatures = [...locationFeatures, ...iotFeatures, ...cameraFeatures, ...alertFeatures, ...incidentFeatures];
   return {
@@ -162,7 +162,7 @@ export function createDemoMapSnapshot(includeCameras = false, command: DemoComma
     markers,
     commandFeatures,
     boundary: { url: "/data/sing-buri-districts.v1.geojson", version: "v1-2019", attribution: "geoBoundaries · Royal Thai Survey Department · OCHA ROAP (CC BY 3.0 IGO)" },
-    bounds: [100.27, 14.75, 100.51, 14.95],
+    bounds: [100.182456714, 14.721096421, 100.488093388, 15.120522984],
     counts: {
       districts: 6,
       subdistricts: DEMO_PROVINCE.subdistricts,

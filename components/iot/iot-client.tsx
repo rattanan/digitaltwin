@@ -177,7 +177,9 @@ export function IotClient({ initialData, canManage, initialSelectedId = null }: 
   }, []);
 
   useEffect(() => {
-    if (initialSelectedId) void selectDevice(initialSelectedId);
+    if (!initialSelectedId) return;
+    const timer = window.setTimeout(() => { void selectDevice(initialSelectedId); }, 0);
+    return () => window.clearTimeout(timer);
   }, [initialSelectedId, selectDevice]);
 
   async function updateStatus(status: IotStatus) {

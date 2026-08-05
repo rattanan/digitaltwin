@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
+import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import { BellRing, Camera, ChevronRight, CircleAlert, Expand, Layers3, LocateFixed, MapPin, RadioTower, RefreshCw, Siren, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -18,8 +18,8 @@ type BoundaryFeature = {
 
 type BoundaryCollection = { type: "FeatureCollection"; features: BoundaryFeature[] };
 type MapApiPayload = { success?: boolean; data?: MapSnapshot; message?: string };
-
-const mapStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || "https://demotiles.maplibre.org/style.json";
+type ProjectedDistrict = { code: string; name: string; path: string; labelX: number; labelY: number };
+type ProjectedMarker = { x: number; y: number; featureIds: string[] };
 
 const fallbackStyle: StyleSpecification = {
   version: 8,
@@ -28,9 +28,11 @@ const fallbackStyle: StyleSpecification = {
   },
   layers: [
     { id: "command-fallback-background", type: "background", paint: { "background-color": "#06111e" } },
-    { id: "command-fallback-map", type: "raster", source: "openstreetmap", paint: { "raster-opacity": 0.32, "raster-saturation": -0.72, "raster-contrast": 0.18 } },
+    { id: "command-fallback-map", type: "raster", source: "openstreetmap", paint: { "raster-opacity": 0.3, "raster-saturation": -0.82, "raster-contrast": 0.22, "raster-brightness-max": 0.42 } },
   ],
 };
+
+const commandMapStyle: string | StyleSpecification = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || fallbackStyle;
 
 const kindMeta: Record<CommandMapKind, { label: string; short: string; icon: LucideIcon; tone: string }> = {
   LOCATION: { label: "จุดสำคัญ", short: "◆", icon: MapPin, tone: "text-amber-200 bg-amber-300/10" },
@@ -48,17 +50,6 @@ const statusTone: Record<MapMarkerStatus, string> = {
   MAINTENANCE: "border-amber-300/25 bg-amber-300/10 text-amber-100",
   DEGRADED: "border-violet-300/25 bg-violet-300/10 text-violet-100",
 };
-
-function pointCollection(features: CommandMapFeature[]) {
-  return {
-    type: "FeatureCollection" as const,
-    features: features.map((feature) => ({
-      type: "Feature" as const,
-      geometry: { type: "Point" as const, coordinates: feature.coordinates },
-      properties: { commandId: feature.id, kind: feature.kind, status: feature.status, short: kindMeta[feature.kind].short },
-    })),
-  };
-}
 
 function geometryBounds(geometry: BoundaryFeature["geometry"]) {
   const bounds: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
@@ -81,6 +72,20 @@ function featurePriority(feature: CommandMapFeature) {
   const status = { CRITICAL: 0, OFFLINE: 1, WARNING: 2, MAINTENANCE: 3, DEGRADED: 4, NORMAL: 5 }[feature.status];
   const kind = { INCIDENT: 0, ALERT: 1, IOT: 2, CCTV: 3, LOCATION: 4 }[feature.kind];
   return status * 10 + kind;
+}
+
+function geometryRings(geometry: BoundaryFeature["geometry"]) {
+  const rings: number[][][] = [];
+  function visit(value: unknown) {
+    if (!Array.isArray(value) || value.length === 0) return;
+    if (Array.isArray(value[0]) && typeof value[0][0] === "number") {
+      rings.push(value as number[][]);
+      return;
+    }
+    value.forEach(visit);
+  }
+  visit(geometry.coordinates);
+  return rings;
 }
 
 function DetailPanel({ feature, onClose }: { feature: CommandMapFeature; onClose: () => void }) {
@@ -109,14 +114,19 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
   const mapRef = useRef<MapLibreMap | null>(null);
   const boundaryRef = useRef<BoundaryCollection | null>(null);
   const snapshotRef = useRef(initialSnapshot);
+  const visibleFeaturesRef = useRef<CommandMapFeature[]>(initialSnapshot.commandFeatures);
+  const selectedIdRef = useRef<string | null>(null);
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [mapReady, setMapReady] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<{ id: string; code: string; name: string } | null>(null);
   const [hoveredDistrict, setHoveredDistrict] = useState("");
+  const [projectedDistricts, setProjectedDistricts] = useState<ProjectedDistrict[]>([]);
+  const [projectedMarkers, setProjectedMarkers] = useState<ProjectedMarker[]>([]);
   const [activeKinds, setActiveKinds] = useState<Record<CommandMapKind, boolean>>({ LOCATION: true, IOT: true, CCTV: true, ALERT: true, INCIDENT: true });
 
   const availableKinds = useMemo(() => (Object.keys(kindMeta) as CommandMapKind[]).filter((kind) => snapshot.commandFeatures.some((feature) => feature.kind === kind)), [snapshot.commandFeatures]);
@@ -127,6 +137,7 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
   const priorityFeatures = filteredFeatures.slice(0, 5);
 
   useEffect(() => { snapshotRef.current = snapshot; }, [snapshot]);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   const fitProvince = useCallback(() => {
     const map = mapRef.current;
@@ -154,6 +165,48 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
     if (bounds) mapRef.current?.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 72, maxZoom: 12.5, duration: 500 });
   }, []);
 
+  const projectOverlay = useCallback(() => {
+    const map = mapRef.current;
+    const boundaries = boundaryRef.current;
+    const shell = shellRef.current;
+    if (!map || !boundaries || !shell) return;
+    const districts = boundaries.features.map((feature) => {
+      const projectedRings = geometryRings(feature.geometry).map((ring) => ring.map(([longitude, latitude]) => map.project([longitude, latitude])));
+      const points = projectedRings.flat();
+      const minX = Math.min(...points.map((point) => point.x));
+      const maxX = Math.max(...points.map((point) => point.x));
+      const minY = Math.min(...points.map((point) => point.y));
+      const maxY = Math.max(...points.map((point) => point.y));
+      return {
+        code: feature.properties.code,
+        name: feature.properties.nameTh,
+        path: projectedRings.map((ring) => ring.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ") + " Z").join(" "),
+        labelX: (minX + maxX) / 2,
+        labelY: (minY + maxY) / 2,
+      };
+    });
+    const width = shell.clientWidth;
+    const height = shell.clientHeight;
+    const projected = visibleFeaturesRef.current.flatMap((feature) => {
+      const point = map.project(feature.coordinates);
+      return point.x < -32 || point.y < -32 || point.x > width + 32 || point.y > height + 32 ? [] : [{ feature, x: point.x, y: point.y }];
+    });
+    const radius = map.getZoom() >= 13 ? 28 : 48;
+    const groups: { x: number; y: number; items: typeof projected }[] = [];
+    projected.forEach((item) => {
+      const forceSingle = item.feature.id === selectedIdRef.current;
+      const group = forceSingle ? undefined : groups.find((candidate) => !candidate.items.some((entry) => entry.feature.id === selectedIdRef.current) && Math.hypot(candidate.x - item.x, candidate.y - item.y) < radius);
+      if (!group) groups.push({ x: item.x, y: item.y, items: [item] });
+      else {
+        group.items.push(item);
+        group.x = group.items.reduce((sum, entry) => sum + entry.x, 0) / group.items.length;
+        group.y = group.items.reduce((sum, entry) => sum + entry.y, 0) / group.items.length;
+      }
+    });
+    setProjectedDistricts(districts);
+    setProjectedMarkers(groups.map((group) => ({ x: group.x, y: group.y, featureIds: group.items.map((item) => item.feature.id) })));
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     let map: MapLibreMap | null = null;
@@ -166,89 +219,61 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
         const boundaries = await boundaryResponse.json() as BoundaryCollection;
         if (disposed || !containerRef.current) return;
         boundaryRef.current = boundaries;
-        map = new maplibre.Map({ container: containerRef.current, style: mapStyle, center: initial.province.center, zoom: 9.4, minZoom: 7, maxZoom: 17, attributionControl: false });
+        map = new maplibre.Map({ container: containerRef.current, style: commandMapStyle, center: initial.province.center, zoom: 9.4, minZoom: 7, maxZoom: 17, attributionControl: false });
         mapRef.current = map;
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "bottom-right");
         map.addControl(new maplibre.AttributionControl({ compact: true, customAttribution: initial.boundary.attribution }), "bottom-right");
         let fallbackUsed = false;
+        let styleAvailable = false;
         map.on("error", () => {
-          if (!map || fallbackUsed || map.loaded()) return;
+          if (!map || fallbackUsed || styleAvailable) return;
           fallbackUsed = true;
           setError("ไม่สามารถโหลด basemap หลักได้ กำลังใช้แผนที่สำรอง");
           map.setStyle(fallbackStyle);
         });
-        map.on("load", () => {
-          if (!map || disposed) return;
-          map.addSource("command-districts", { type: "geojson", data: boundaries as never });
-          map.addLayer({ id: "command-district-fill", type: "fill", source: "command-districts", paint: { "fill-color": ["case", ["==", ["get", "code"], "1701"], "#22d3ee", "#1686b8"], "fill-opacity": 0.14 } });
-          map.addLayer({ id: "command-district-glow", type: "line", source: "command-districts", paint: { "line-color": "#67e8f9", "line-width": 1.6, "line-opacity": 0.7 } });
-          map.addLayer({ id: "command-district-label", type: "symbol", source: "command-districts", layout: { "text-field": ["get", "nameTh"], "text-size": 11, "text-font": ["Open Sans Regular"] }, paint: { "text-color": "#bae6fd", "text-halo-color": "#06111e", "text-halo-width": 1.5 } });
-          map.addSource("command-points", { type: "geojson", data: pointCollection(initial.commandFeatures), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
-          map.addLayer({ id: "command-clusters", type: "circle", source: "command-points", filter: ["has", "point_count"], paint: { "circle-color": "#0e7490", "circle-radius": ["step", ["get", "point_count"], 18, 10, 23, 30, 28], "circle-stroke-color": "#a5f3fc", "circle-stroke-width": 2, "circle-opacity": 0.92 } });
-          map.addLayer({ id: "command-cluster-count", type: "symbol", source: "command-points", filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 11 }, paint: { "text-color": "#ecfeff" } });
-          map.addLayer({ id: "command-point-halo", type: "circle", source: "command-points", filter: ["!", ["has", "point_count"]], paint: { "circle-radius": ["case", ["==", ["get", "status"], "CRITICAL"], 16, 13], "circle-color": ["match", ["get", "status"], "CRITICAL", "#fb7185", "WARNING", "#fbbf24", "OFFLINE", "#fb7185", "MAINTENANCE", "#fbbf24", "DEGRADED", "#c4b5fd", "#34d399"], "circle-opacity": 0.2, "circle-blur": 0.35 } });
-          map.addLayer({ id: "command-points-visible", type: "circle", source: "command-points", filter: ["!", ["has", "point_count"]], paint: { "circle-radius": 9, "circle-color": ["match", ["get", "kind"], "LOCATION", "#fbbf24", "IOT", "#34d399", "CCTV", "#a78bfa", "ALERT", "#fb7185", "#fb923c"], "circle-stroke-color": "#06111e", "circle-stroke-width": 2 } });
-          map.addLayer({ id: "command-point-symbol", type: "symbol", source: "command-points", filter: ["!", ["has", "point_count"]], layout: { "text-field": ["get", "short"], "text-size": 10, "text-font": ["Open Sans Bold"], "text-allow-overlap": true }, paint: { "text-color": "#07111f" } });
-
-          const pointClick = (event: MapLayerMouseEvent) => {
-            const id = event.features?.[0]?.properties?.commandId;
-            if (typeof id === "string") selectFeature(id);
-          };
-          map.on("click", "command-points-visible", pointClick);
-          map.on("click", "command-point-symbol", pointClick);
-          map.on("click", "command-clusters", async (event) => {
-            const feature = event.features?.[0];
-            const clusterId = feature?.properties?.cluster_id;
-            if (!feature || typeof clusterId !== "number" || feature.geometry.type !== "Point") return;
-            const source = map?.getSource("command-points") as GeoJSONSource | undefined;
-            const zoom = await source?.getClusterExpansionZoom(clusterId);
-            if (zoom !== undefined) map?.easeTo({ center: feature.geometry.coordinates as [number, number], zoom, duration: 350 });
-          });
-          map.on("click", "command-district-fill", (event) => {
-            const code = event.features?.[0]?.properties?.code;
-            if (typeof code === "string") selectBoundary(code);
-          });
-          map.on("mousemove", "command-district-fill", (event) => {
-            if (map) map.getCanvas().style.cursor = "pointer";
-            setHoveredDistrict(String(event.features?.[0]?.properties?.nameTh ?? ""));
-          });
-          map.on("mouseleave", "command-district-fill", () => { if (map) map.getCanvas().style.cursor = ""; setHoveredDistrict(""); });
-          ["command-points-visible", "command-point-symbol", "command-clusters"].forEach((layer) => {
-            map?.on("mouseenter", layer, () => { if (map) map.getCanvas().style.cursor = "pointer"; });
-            map?.on("mouseleave", layer, () => { if (map) map.getCanvas().style.cursor = ""; });
-          });
+        let overlayReady = false;
+        let projectionFrame = 0;
+        const scheduleProjection = () => {
+          window.cancelAnimationFrame(projectionFrame);
+          projectionFrame = window.requestAnimationFrame(projectOverlay);
+        };
+        const setupCommandOverlay = () => {
+          if (!map || disposed || overlayReady) return;
+          overlayReady = true;
+          styleAvailable = true;
           setMapReady(true);
           setLoading(false);
           if (initial.bounds) map.fitBounds([[initial.bounds[0], initial.bounds[1]], [initial.bounds[2], initial.bounds[3]]], { padding: 44, maxZoom: 10.6, duration: 0 });
-        });
+          map.on("move", scheduleProjection);
+          map.on("resize", scheduleProjection);
+          window.setTimeout(scheduleProjection, 50);
+        };
+        map.on("style.load", setupCommandOverlay);
+        map.on("load", setupCommandOverlay);
       } catch (cause) {
         if (disposed || controller.signal.aborted) return;
         setLoading(false);
+        setMapFailed(true);
         setError(cause instanceof Error ? cause.message : "ไม่สามารถเริ่มต้นแผนที่ได้");
       }
     }
     void initialize();
     return () => { disposed = true; controller.abort(); map?.remove(); mapRef.current = null; };
-  }, [selectBoundary, selectFeature]);
+  }, [projectOverlay]);
 
   useEffect(() => {
+    visibleFeaturesRef.current = filteredFeatures;
     if (!mapReady) return;
-    const source = mapRef.current?.getSource("command-points") as GeoJSONSource | undefined;
-    source?.setData(pointCollection(filteredFeatures));
-    if (selectedId && !filteredFeatures.some((feature) => feature.id === selectedId)) setSelectedId(null);
-  }, [filteredFeatures, mapReady, selectedId]);
-
-  useEffect(() => {
-    if (!mapReady) return;
-    mapRef.current?.setPaintProperty("command-district-fill", "fill-opacity", selectedDistrict ? ["case", ["==", ["get", "code"], selectedDistrict.code], 0.34, 0.06] : 0.14);
-  }, [mapReady, selectedDistrict]);
+    const frame = window.requestAnimationFrame(projectOverlay);
+    return () => window.cancelAnimationFrame(frame);
+  }, [filteredFeatures, mapReady, projectOverlay]);
 
   useEffect(() => {
     let active = true;
     async function refresh() {
       setRefreshing(true);
       try {
-        const response = await fetch("/api/v1/map", { cache: "no-store" });
+        const response = await fetch("/api/v1/dashboard/map", { cache: "no-store" });
         const payload = await response.json() as MapApiPayload;
         if (!response.ok || !payload.success || !payload.data) throw new Error(payload.message ?? "รีเฟรชข้อมูลแผนที่ไม่สำเร็จ");
         if (active) { setSnapshot(payload.data); setError(""); }
@@ -260,7 +285,20 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
     return () => { active = false; window.clearInterval(timer); };
   }, []);
 
+  function openProjectedMarker(marker: ProjectedMarker) {
+    const features = marker.featureIds.flatMap((id) => snapshot.commandFeatures.find((feature) => feature.id === id) ?? []);
+    if (features.length === 1) {
+      selectFeature(features[0].id);
+      return;
+    }
+    if (features.length > 1) {
+      const center: [number, number] = [features.reduce((sum, feature) => sum + feature.coordinates[0], 0) / features.length, features.reduce((sum, feature) => sum + feature.coordinates[1], 0) / features.length];
+      mapRef.current?.easeTo({ center, zoom: Math.min(16, mapRef.current.getZoom() + 2), duration: 380 });
+    }
+  }
+
   function toggleKind(kind: CommandMapKind) {
+    if (selectedFeature?.kind === kind && activeKinds[kind]) setSelectedId(null);
     setActiveKinds((current) => ({ ...current, [kind]: !current[kind] }));
   }
 
@@ -279,11 +317,27 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
     <div ref={shellRef} className="map-shell command-map-shell relative min-h-[560px] bg-[#06111e] sm:min-h-[620px] lg:min-h-[65vh] lg:max-h-[820px]">
       <div ref={containerRef} className="absolute inset-0" role="region" aria-label="แผนที่สถานการณ์จังหวัดสิงห์บุรี" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,transparent_35%,rgba(3,10,20,.38)_100%)]" />
+      <svg className="pointer-events-none absolute inset-0 z-[5] size-full overflow-hidden" aria-hidden="true">
+        {projectedDistricts.map((district) => <g key={district.code}>
+          <path d={district.path} className={cn("pointer-events-auto cursor-pointer transition-[fill,stroke,opacity] duration-200", selectedDistrict?.code === district.code ? "fill-cyan-300/30 stroke-cyan-100" : "fill-cyan-700/20 stroke-cyan-300/80 hover:fill-cyan-400/25 hover:stroke-cyan-100")} strokeWidth={selectedDistrict?.code === district.code ? 2.8 : 1.8} onClick={() => selectBoundary(district.code)} onMouseEnter={() => setHoveredDistrict(district.name)} onMouseLeave={() => setHoveredDistrict("")} />
+          <text x={district.labelX} y={district.labelY} textAnchor="middle" className="select-none fill-cyan-50/80 text-[10px] font-medium [paint-order:stroke] [stroke:#06111e] [stroke-width:3px]">{district.name}</text>
+        </g>)}
+      </svg>
+      <div className="pointer-events-none absolute inset-0 z-[8]">{projectedMarkers.map((marker) => {
+        const features = marker.featureIds.flatMap((id) => snapshot.commandFeatures.find((feature) => feature.id === id) ?? []);
+        const primary = features.sort((left, right) => featurePriority(left) - featurePriority(right))[0];
+        if (!primary) return null;
+        const Icon = kindMeta[primary.kind].icon;
+        const critical = features.some((feature) => feature.status === "CRITICAL" || feature.status === "OFFLINE");
+        return <button key={marker.featureIds.join(":")} type="button" onClick={() => openProjectedMarker(marker)} style={{ left: marker.x, top: marker.y }} className={cn("pointer-events-auto absolute flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-slate-950/80 text-slate-950 shadow-[0_0_0_5px_rgba(103,232,249,.12),0_8px_24px_rgba(2,8,23,.5)] transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none", primary.kind === "LOCATION" ? "bg-amber-300" : primary.kind === "IOT" ? "bg-emerald-300" : primary.kind === "CCTV" ? "bg-violet-300" : primary.kind === "ALERT" ? "bg-rose-300" : "bg-orange-300", critical && "animate-pulse motion-reduce:animate-none")} aria-label={features.length > 1 ? `กลุ่มข้อมูล ${features.length} จุด กดเพื่อขยาย` : `${primary.title} สถานะ ${primary.statusLabel}`} title={features.length > 1 ? `${features.length} จุด` : primary.title}>{features.length > 1 ? <span className="text-xs font-bold">{features.length}</span> : <Icon className="size-4" />}</button>;
+      })}</div>
       {loading && <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#06111e]/95"><div className="text-center"><RefreshCw className="mx-auto size-7 animate-spin motion-reduce:animate-none text-cyan-200" /><p className="mt-3 text-sm text-slate-300">กำลังเตรียม Command Map</p><p className="mt-1 text-xs text-slate-500">โหลดขอบเขตจริงและข้อมูลสถานการณ์</p></div></div>}
+      {mapFailed && <div className="absolute inset-0 z-30 overflow-y-auto bg-[#06111e] px-4 pb-24 pt-20 sm:px-6 sm:pt-24"><div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-white/[.03] p-4"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 size-5 shrink-0 text-amber-200" /><div><p className="text-sm font-medium text-slate-100">แสดงข้อมูลแบบรายการแทนแผนที่</p><p className="mt-1 text-xs leading-5 text-slate-400">ยังเลือกจุดและเปิดระบบที่เกี่ยวข้องได้ตามปกติ</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2">{filteredFeatures.map((feature) => { const Icon = kindMeta[feature.kind].icon; return <button key={`fallback:${feature.kind}:${feature.id}`} type="button" onClick={() => setSelectedId(feature.id)} className="flex min-h-11 items-center gap-3 rounded-xl border border-white/[.07] bg-slate-950/40 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"><Icon className="size-4 shrink-0 text-cyan-200" /><span className="min-w-0 flex-1"><span className="block truncate text-xs text-slate-200">{feature.title}</span><span className="mt-0.5 block truncate text-[10px] text-slate-500">{feature.districtName ?? "จังหวัดสิงห์บุรี"}</span></span><Badge className={statusTone[feature.status]}>{feature.statusLabel}</Badge></button>; })}</div></div></div>}
       {error && <div className="absolute inset-x-3 top-3 z-40 flex items-start gap-2 rounded-xl border border-amber-300/25 bg-[#19160d]/95 px-3 py-2 text-xs text-amber-100 shadow-xl sm:left-4 sm:right-auto sm:max-w-md"><CircleAlert className="mt-0.5 size-4 shrink-0" /><span className="leading-5">{error}</span><button type="button" onClick={() => setError("")} className="ml-auto flex size-7 items-center justify-center rounded-lg hover:bg-white/10" aria-label="ปิดข้อความ"><X className="size-3.5" /></button></div>}
       <div className="absolute left-3 top-3 z-20 rounded-2xl border border-white/10 bg-[#071522]/88 p-2 shadow-xl backdrop-blur-xl sm:left-4 sm:top-4 sm:p-3">
         <p className="mb-2 hidden items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400 sm:flex"><Layers3 className="size-3" />ชั้นข้อมูล</p>
         <div className="flex flex-wrap gap-1.5 sm:max-w-[290px]">{availableKinds.map((kind) => { const meta = kindMeta[kind]; const Icon = meta.icon; return <button key={kind} type="button" onClick={() => toggleKind(kind)} aria-pressed={activeKinds[kind]} className={cn("flex min-h-11 items-center gap-1.5 rounded-xl border px-2.5 text-[10px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200", activeKinds[kind] ? "border-cyan-200/20 bg-cyan-200/10 text-cyan-50" : "border-white/10 bg-slate-950/40 text-slate-500")}><Icon className="size-3.5" />{meta.label}</button>; })}</div>
+        <label className="mt-2 block border-t border-white/[.07] pt-2"><span className="sr-only">เลือกอำเภอบนแผนที่</span><select value={selectedDistrict?.code ?? "ALL"} onChange={(event) => event.target.value === "ALL" ? fitProvince() : selectBoundary(event.target.value)} className="min-h-11 w-full cursor-pointer rounded-xl border border-white/10 bg-slate-950/70 px-3 text-xs text-slate-200 outline-none focus:ring-2 focus:ring-cyan-200"><option value="ALL">ทั้งจังหวัดสิงห์บุรี</option>{snapshot.areas.filter((area) => area.level === "DISTRICT").map((area) => <option key={area.id} value={area.code}>{area.nameTh}</option>)}</select></label>
       </div>
       {(hoveredDistrict || selectedDistrict) && <div className="absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-xl border border-cyan-200/15 bg-[#071522]/90 px-4 py-2 text-center shadow-xl backdrop-blur-xl"><p className="text-[10px] text-slate-500">{selectedDistrict ? "กำลังดูพื้นที่" : "คลิกเพื่อเจาะพื้นที่"}</p><p className="mt-0.5 text-sm font-medium text-cyan-50">{selectedDistrict?.name ?? hoveredDistrict}</p></div>}
       <div className="absolute bottom-4 left-4 z-20 hidden w-64 rounded-2xl border border-white/10 bg-[#071522]/88 p-3 shadow-xl backdrop-blur-xl lg:block"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">จุดที่ควรติดตาม</p>{refreshing && <RefreshCw className="size-3 animate-spin text-cyan-200" />}</div><div className="space-y-1.5">{priorityFeatures.map((feature) => { const Icon = kindMeta[feature.kind].icon; return <button key={`${feature.kind}:${feature.id}`} type="button" onClick={() => selectFeature(feature.id)} className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-white/[.06] bg-white/[.025] px-2.5 text-left transition hover:border-cyan-200/20 hover:bg-cyan-200/[.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"><Icon className="size-3.5 shrink-0 text-cyan-200" /><span className="min-w-0 flex-1 truncate text-[10px] text-slate-200">{feature.title}</span><span className={cn("size-2 rounded-full", feature.status === "CRITICAL" || feature.status === "OFFLINE" ? "bg-rose-300" : feature.status === "WARNING" ? "bg-amber-300" : "bg-emerald-300")} /></button>; })}</div></div>

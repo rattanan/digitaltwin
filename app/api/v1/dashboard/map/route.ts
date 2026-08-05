@@ -1,0 +1,19 @@
+import { handleApiError, success } from "@/lib/api/http";
+import { hasPermission } from "@/lib/auth/access";
+import { requireApiAuth } from "@/lib/auth/guards";
+import { getMapSnapshot } from "@/lib/map/queries";
+
+export async function GET() {
+  try {
+    const auth = await requireApiAuth("dashboard.read");
+    const snapshot = await getMapSnapshot({
+      includeCameras: hasPermission(auth.user, "cctv.read"),
+      includeIot: hasPermission(auth.user, "iot.read"),
+      includeAlerts: hasPermission(auth.user, "alerts.read"),
+      includeIncidents: hasPermission(auth.user, "incidents.read"),
+    });
+    return success(snapshot, { total: snapshot.commandFeatures.length });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

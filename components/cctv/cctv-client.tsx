@@ -169,7 +169,9 @@ export function CctvClient({ initialData, canManage, initialSelectedId = null }:
   }, []);
 
   useEffect(() => {
-    if (initialSelectedId) void selectCamera(initialSelectedId);
+    if (!initialSelectedId) return;
+    const timer = window.setTimeout(() => { void selectCamera(initialSelectedId); }, 0);
+    return () => window.clearTimeout(timer);
   }, [initialSelectedId, selectCamera]);
 
   async function updateStatus(status: CctvStatus) {

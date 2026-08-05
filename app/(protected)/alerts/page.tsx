@@ -5,8 +5,9 @@ import { getAlertOverview } from "@/lib/operations/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function AlertsPage() {
+export default async function AlertsPage({ searchParams }: { searchParams: Promise<{ alert?: string }> }) {
   const auth = await requirePageAuth("alerts.read");
+  const params = await searchParams;
   const overview = await getAlertOverview({ limit: 100 });
-  return <AlertCenterClient initialData={overview} canManage={hasPermission(auth.user, "alerts.manage")} />;
+  return <AlertCenterClient initialData={overview} canManage={hasPermission(auth.user, "alerts.manage")} initialSelectedId={params.alert ?? null} />;
 }
