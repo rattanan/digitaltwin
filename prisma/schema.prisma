@@ -1,0 +1,759 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id               String    @id @default(uuid()) @db.Char(36)
+  publicId         String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  username         String    @unique @db.VarChar(120)
+  displayName      String    @map("display_name") @db.VarChar(191)
+  email            String?   @unique @db.VarChar(191)
+  passwordHash     String    @map("password_hash") @db.VarChar(255)
+  isActive         Boolean   @default(true) @map("is_active")
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.DateTime(3)
+  lastLoginAt      DateTime? @map("last_login_at") @db.DateTime(3)
+  agencyId         String?   @map("agency_id") @db.Char(36)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt        DateTime? @map("deleted_at") @db.DateTime(3)
+
+  agency          Agency?          @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  userRoles       UserRole[]
+  dataScopes      UserDataScope[]
+  sessions        Session[]
+  refreshTokens   RefreshToken[]
+  auditLogs       AuditLog[]       @relation("AuditActor")
+  aiConversations AiConversation[]
+
+  @@index([agencyId])
+  @@index([isActive, deletedAt])
+  @@map("users")
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Char(36)
+  publicId    String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  code        String    @unique @db.VarChar(80)
+  nameTh      String    @map("name_th") @db.VarChar(191)
+  nameEn      String    @map("name_en") @db.VarChar(191)
+  description String?   @db.VarChar(500)
+  isSystem    Boolean   @default(false) @map("is_system")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt   DateTime? @map("deleted_at") @db.DateTime(3)
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@index([deletedAt])
+  @@map("roles")
+}
+
+model Permission {
+  id        String   @id @default(uuid()) @db.Char(36)
+  code      String   @unique @db.VarChar(120)
+  module    String   @db.VarChar(80)
+  action    String   @db.VarChar(80)
+  nameTh    String   @map("name_th") @db.VarChar(191)
+  nameEn    String   @map("name_en") @db.VarChar(191)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  rolePermissions RolePermission[]
+
+  @@index([module, action])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Char(36)
+  roleId    String   @map("role_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String   @map("role_id") @db.Char(36)
+  permissionId String   @map("permission_id") @db.Char(36)
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserDataScope {
+  id         String   @id @default(uuid()) @db.Char(36)
+  userId     String   @map("user_id") @db.Char(36)
+  scopeType  String   @map("scope_type") @db.VarChar(40)
+  scopeValue String   @map("scope_value") @db.VarChar(120)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scopeType, scopeValue])
+  @@map("user_data_scopes")
+}
+
+model Session {
+  id           String    @id @default(uuid()) @db.Char(36)
+  userId       String    @map("user_id") @db.Char(36)
+  sessionToken String    @unique @map("session_token") @db.VarChar(255)
+  ipAddress    String?   @map("ip_address") @db.VarChar(64)
+  userAgent    String?   @map("user_agent") @db.VarChar(500)
+  expiresAt    DateTime  @map("expires_at") @db.DateTime(3)
+  revokedAt    DateTime? @map("revoked_at") @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([userId, revokedAt, expiresAt])
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Char(36)
+  sessionId    String    @map("session_id") @db.Char(36)
+  userId       String    @map("user_id") @db.Char(36)
+  tokenHash    String    @unique @map("token_hash") @db.Char(64)
+  expiresAt    DateTime  @map("expires_at") @db.DateTime(3)
+  usedAt       DateTime? @map("used_at") @db.DateTime(3)
+  revokedAt    DateTime? @map("revoked_at") @db.DateTime(3)
+  replacedById String?   @map("replaced_by_id") @db.Char(36)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([sessionId])
+  @@map("refresh_tokens")
+}
+
+model Agency {
+  id           String    @id @default(uuid()) @db.Char(36)
+  publicId     String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  code         String    @unique @db.VarChar(80)
+  nameTh       String    @map("name_th") @db.VarChar(191)
+  nameEn       String?   @map("name_en") @db.VarChar(191)
+  description  String?   @db.VarChar(500)
+  contactName  String?   @map("contact_name") @db.VarChar(191)
+  contactPhone String?   @map("contact_phone") @db.VarChar(80)
+  contactEmail String?   @map("contact_email") @db.VarChar(191)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt    DateTime? @map("deleted_at") @db.DateTime(3)
+
+  users       User[]
+  locations   Location[]
+  cctvCameras CctvCamera[]
+  iotDevices  IotDevice[]
+  alerts      Alert[]
+  incidents   Incident[]
+
+  @@index([isActive, deletedAt])
+  @@map("agencies")
+}
+
+model Province {
+  id         String    @id @default(uuid()) @db.Char(36)
+  publicId   String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  code       String    @unique @db.VarChar(20)
+  nameTh     String    @map("name_th") @db.VarChar(191)
+  nameEn     String?   @map("name_en") @db.VarChar(191)
+  areaSqKm   Decimal?  @map("area_sq_km") @db.Decimal(12, 2)
+  latitude   Decimal?  @db.Decimal(10, 7)
+  longitude  Decimal?  @db.Decimal(10, 7)
+  population Int?
+  households Int?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3)
+
+  districts       District[]
+  locations       Location[]
+  cctvCameras     CctvCamera[]
+  iotDevices      IotDevice[]
+  alerts          Alert[]
+  incidents       Incident[]
+  statisticValues StatisticValue[]
+
+  @@index([deletedAt])
+  @@map("provinces")
+}
+
+model District {
+  id         String    @id @default(uuid()) @db.Char(36)
+  publicId   String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  provinceId String    @map("province_id") @db.Char(36)
+  code       String    @db.VarChar(20)
+  nameTh     String    @map("name_th") @db.VarChar(191)
+  nameEn     String?   @map("name_en") @db.VarChar(191)
+  areaSqKm   Decimal?  @map("area_sq_km") @db.Decimal(12, 2)
+  latitude   Decimal?  @db.Decimal(10, 7)
+  longitude  Decimal?  @db.Decimal(10, 7)
+  population Int?
+  households Int?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3)
+
+  province        Province         @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  subdistricts    Subdistrict[]
+  locations       Location[]
+  cctvCameras     CctvCamera[]
+  iotDevices      IotDevice[]
+  alerts          Alert[]
+  incidents       Incident[]
+  statisticValues StatisticValue[]
+
+  @@unique([provinceId, code])
+  @@index([provinceId, deletedAt])
+  @@map("districts")
+}
+
+model Subdistrict {
+  id         String    @id @default(uuid()) @db.Char(36)
+  publicId   String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  districtId String    @map("district_id") @db.Char(36)
+  code       String    @db.VarChar(20)
+  nameTh     String    @map("name_th") @db.VarChar(191)
+  nameEn     String?   @map("name_en") @db.VarChar(191)
+  areaSqKm   Decimal?  @map("area_sq_km") @db.Decimal(12, 2)
+  latitude   Decimal?  @db.Decimal(10, 7)
+  longitude  Decimal?  @db.Decimal(10, 7)
+  population Int?
+  households Int?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3)
+
+  district    District     @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  villages    Village[]
+  locations   Location[]
+  cctvCameras CctvCamera[]
+  iotDevices  IotDevice[]
+  alerts      Alert[]
+  incidents   Incident[]
+
+  @@unique([districtId, code])
+  @@index([districtId, deletedAt])
+  @@map("subdistricts")
+}
+
+model Village {
+  id            String    @id @default(uuid()) @db.Char(36)
+  publicId      String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  subdistrictId String    @map("subdistrict_id") @db.Char(36)
+  code          String    @db.VarChar(20)
+  nameTh        String    @map("name_th") @db.VarChar(191)
+  nameEn        String?   @map("name_en") @db.VarChar(191)
+  areaSqKm      Decimal?  @map("area_sq_km") @db.Decimal(12, 2)
+  latitude      Decimal?  @db.Decimal(10, 7)
+  longitude     Decimal?  @db.Decimal(10, 7)
+  population    Int?
+  households    Int?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+
+  subdistrict Subdistrict @relation(fields: [subdistrictId], references: [id], onDelete: Restrict)
+
+  @@unique([subdistrictId, code])
+  @@index([subdistrictId, deletedAt])
+  @@map("villages")
+}
+
+model SystemSetting {
+  id          String   @id @default(uuid()) @db.Char(36)
+  settingKey  String   @unique @map("setting_key") @db.VarChar(191)
+  valueJson   Json     @map("value_json")
+  category    String   @default("system") @db.VarChar(80)
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedById String?  @map("updated_by_id") @db.Char(36)
+
+  @@index([category])
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    String?  @map("actor_id") @db.Char(36)
+  action     String   @db.VarChar(80)
+  module     String   @db.VarChar(80)
+  entityType String?  @map("entity_type") @db.VarChar(100)
+  entityId   String?  @map("entity_id") @db.VarChar(120)
+  requestId  String?  @map("request_id") @db.VarChar(120)
+  ipAddress  String?  @map("ip_address") @db.VarChar(64)
+  userAgent  String?  @map("user_agent") @db.VarChar(500)
+  beforeData Json?    @map("before_data")
+  afterData  Json?    @map("after_data")
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([module, entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Location {
+  id            String    @id @default(uuid()) @db.Char(36)
+  publicId      String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  nameTh        String    @map("name_th") @db.VarChar(191)
+  nameEn        String?   @map("name_en") @db.VarChar(191)
+  category      String    @db.VarChar(80)
+  address       String?   @db.VarChar(500)
+  latitude      Decimal   @db.Decimal(10, 7)
+  longitude     Decimal   @db.Decimal(10, 7)
+  agencyId      String?   @map("agency_id") @db.Char(36)
+  provinceId    String?   @map("province_id") @db.Char(36)
+  districtId    String?   @map("district_id") @db.Char(36)
+  subdistrictId String?   @map("subdistrict_id") @db.Char(36)
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+
+  agency      Agency?      @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  province    Province?    @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  district    District?    @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  subdistrict Subdistrict? @relation(fields: [subdistrictId], references: [id], onDelete: SetNull)
+  cameras     CctvCamera[]
+  devices     IotDevice[]
+  alerts      Alert[]
+  incidents   Incident[]
+
+  @@index([category, deletedAt])
+  @@index([provinceId, districtId, subdistrictId])
+  @@map("locations")
+}
+
+model CctvCamera {
+  id            String    @id @default(uuid()) @db.Char(36)
+  publicId      String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  cameraCode    String    @unique @map("camera_code") @db.VarChar(80)
+  nameTh        String    @map("name_th") @db.VarChar(191)
+  nameEn        String?   @map("name_en") @db.VarChar(191)
+  status        String    @db.VarChar(40)
+  nfsFolderPath String?   @map("nfs_folder_path") @db.VarChar(500)
+  lastImageAt   DateTime? @map("last_image_at") @db.DateTime(3)
+  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
+  latitude      Decimal?  @db.Decimal(10, 7)
+  longitude     Decimal?  @db.Decimal(10, 7)
+  agencyId      String?   @map("agency_id") @db.Char(36)
+  locationId    String?   @map("location_id") @db.Char(36)
+  provinceId    String?   @map("province_id") @db.Char(36)
+  districtId    String?   @map("district_id") @db.Char(36)
+  subdistrictId String?   @map("subdistrict_id") @db.Char(36)
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+
+  agency      Agency?        @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  location    Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  province    Province?      @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  district    District?      @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  subdistrict Subdistrict?   @relation(fields: [subdistrictId], references: [id], onDelete: SetNull)
+  snapshots   CctvSnapshot[]
+  aiResults   CctvAiResult[]
+  alerts      Alert[]
+  incidents   Incident[]
+
+  @@index([status, deletedAt])
+  @@index([districtId, status])
+  @@map("cctv_cameras")
+}
+
+model CctvSnapshot {
+  id             BigInt    @id @default(autoincrement())
+  cameraId       String    @map("camera_id") @db.Char(36)
+  imagePath      String    @map("image_path") @db.VarChar(500)
+  capturedAt     DateTime  @map("captured_at") @db.DateTime(3)
+  fileModifiedAt DateTime? @map("file_modified_at") @db.DateTime(3)
+  fileSizeBytes  BigInt?   @map("file_size_bytes")
+  metadata       Json?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  camera    CctvCamera     @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  aiResults CctvAiResult[]
+
+  @@index([cameraId, capturedAt])
+  @@map("cctv_snapshots")
+}
+
+model CctvAiResult {
+  id           BigInt   @id @default(autoincrement())
+  cameraId     String   @map("camera_id") @db.Char(36)
+  snapshotId   BigInt?  @map("snapshot_id")
+  eventType    String   @map("event_type") @db.VarChar(80)
+  confidence   Decimal  @db.Decimal(5, 4)
+  detectedAt   DateTime @map("detected_at") @db.DateTime(3)
+  verification String   @default("UNVERIFIED") @db.VarChar(40)
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  camera   CctvCamera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  snapshot CctvSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+
+  @@index([cameraId, detectedAt])
+  @@index([eventType, confidence])
+  @@map("cctv_ai_results")
+}
+
+model IotDeviceType {
+  id          String   @id @default(uuid()) @db.Char(36)
+  code        String   @unique @db.VarChar(80)
+  nameTh      String   @map("name_th") @db.VarChar(191)
+  nameEn      String?  @map("name_en") @db.VarChar(191)
+  description String?  @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  devices IotDevice[]
+  metrics IotMetric[]
+
+  @@map("iot_device_types")
+}
+
+model IotDevice {
+  id            String    @id @default(uuid()) @db.Char(36)
+  publicId      String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  deviceCode    String    @unique @map("device_code") @db.VarChar(80)
+  nameTh        String    @map("name_th") @db.VarChar(191)
+  status        String    @db.VarChar(40)
+  unit          String?   @db.VarChar(40)
+  battery       Decimal?  @db.Decimal(5, 2)
+  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
+  typeId        String    @map("type_id") @db.Char(36)
+  agencyId      String?   @map("agency_id") @db.Char(36)
+  locationId    String?   @map("location_id") @db.Char(36)
+  provinceId    String?   @map("province_id") @db.Char(36)
+  districtId    String?   @map("district_id") @db.Char(36)
+  subdistrictId String?   @map("subdistrict_id") @db.Char(36)
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+
+  type         IotDeviceType    @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  agency       Agency?          @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  location     Location?        @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  province     Province?        @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  district     District?        @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  subdistrict  Subdistrict?     @relation(fields: [subdistrictId], references: [id], onDelete: SetNull)
+  metrics      IotMetric[]
+  readings     IotReading[]
+  latestValues IotLatestValue[]
+  alerts       Alert[]
+  incidents    Incident[]
+
+  @@index([typeId, status])
+  @@index([districtId, status])
+  @@map("iot_devices")
+}
+
+model IotMetric {
+  id        String   @id @default(uuid()) @db.Char(36)
+  deviceId  String   @map("device_id") @db.Char(36)
+  typeId    String   @map("type_id") @db.Char(36)
+  metricKey String   @map("metric_key") @db.VarChar(80)
+  nameTh    String   @map("name_th") @db.VarChar(191)
+  unit      String?  @db.VarChar(40)
+  warning   Decimal? @db.Decimal(20, 6)
+  critical  Decimal? @db.Decimal(20, 6)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  device   IotDevice     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  type     IotDeviceType @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  readings IotReading[]
+
+  @@unique([deviceId, metricKey])
+  @@map("iot_metrics")
+}
+
+model IotReading {
+  id             BigInt   @id @default(autoincrement())
+  deviceId       String   @map("device_id") @db.Char(36)
+  metricId       String?  @map("metric_id") @db.Char(36)
+  metricKey      String   @map("metric_key") @db.VarChar(80)
+  value          Decimal  @db.Decimal(20, 6)
+  unit           String?  @db.VarChar(40)
+  recordedAt     DateTime @map("recorded_at") @db.DateTime(3)
+  idempotencyKey String?  @unique @map("idempotency_key") @db.VarChar(191)
+  metadata       Json?
+
+  device IotDevice  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  metric IotMetric? @relation(fields: [metricId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId, recordedAt, metricKey])
+  @@map("iot_readings")
+}
+
+model IotLatestValue {
+  id         String   @id @default(uuid()) @db.Char(36)
+  deviceId   String   @map("device_id") @db.Char(36)
+  metricKey  String   @map("metric_key") @db.VarChar(80)
+  value      Decimal  @db.Decimal(20, 6)
+  unit       String?  @db.VarChar(40)
+  recordedAt DateTime @map("recorded_at") @db.DateTime(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  device IotDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, metricKey])
+  @@index([metricKey, recordedAt])
+  @@map("iot_latest_values")
+}
+
+model Alert {
+  id             String    @id @default(uuid()) @db.Char(36)
+  publicId       String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  title          String    @db.VarChar(191)
+  description    String?   @db.VarChar(1000)
+  source         String    @db.VarChar(80)
+  severity       String    @db.VarChar(40)
+  status         String    @db.VarChar(40)
+  agencyId       String?   @map("agency_id") @db.Char(36)
+  provinceId     String?   @map("province_id") @db.Char(36)
+  districtId     String?   @map("district_id") @db.Char(36)
+  subdistrictId  String?   @map("subdistrict_id") @db.Char(36)
+  locationId     String?   @map("location_id") @db.Char(36)
+  cameraId       String?   @map("camera_id") @db.Char(36)
+  deviceId       String?   @map("device_id") @db.Char(36)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  acknowledgedAt DateTime? @map("acknowledged_at") @db.DateTime(3)
+  resolvedAt     DateTime? @map("resolved_at") @db.DateTime(3)
+  metadata       Json?
+
+  agency      Agency?        @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  province    Province?      @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  district    District?      @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  subdistrict Subdistrict?   @relation(fields: [subdistrictId], references: [id], onDelete: SetNull)
+  location    Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  camera      CctvCamera?    @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  device      IotDevice?     @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  histories   AlertHistory[]
+  incidents   Incident[]
+
+  @@index([severity, status, createdAt])
+  @@index([districtId, createdAt])
+  @@map("alerts")
+}
+
+model AlertHistory {
+  id        BigInt   @id @default(autoincrement())
+  alertId   String   @map("alert_id") @db.Char(36)
+  action    String   @db.VarChar(80)
+  note      String?  @db.VarChar(1000)
+  actorId   String?  @map("actor_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId, createdAt])
+  @@map("alert_histories")
+}
+
+model Incident {
+  id             String    @id @default(uuid()) @db.Char(36)
+  publicId       String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  incidentNo     String    @unique @map("incident_no") @db.VarChar(80)
+  title          String    @db.VarChar(191)
+  description    String?   @db.VarChar(1200)
+  category       String    @db.VarChar(80)
+  severity       String    @db.VarChar(40)
+  status         String    @db.VarChar(40)
+  dueAt          DateTime? @map("due_at") @db.DateTime(3)
+  agencyId       String?   @map("agency_id") @db.Char(36)
+  provinceId     String?   @map("province_id") @db.Char(36)
+  districtId     String?   @map("district_id") @db.Char(36)
+  locationId     String?   @map("location_id") @db.Char(36)
+  alertId        String?   @map("alert_id") @db.Char(36)
+  cameraId       String?   @map("camera_id") @db.Char(36)
+  deviceId       String?   @map("device_id") @db.Char(36)
+  assignedUserId String?   @map("assigned_user_id") @db.Char(36)
+  resolution     String?   @db.VarChar(1200)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  closedAt       DateTime? @map("closed_at") @db.DateTime(3)
+
+  agency        Agency?           @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  province      Province?         @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  district      District?         @relation(fields: [districtId], references: [id], onDelete: SetNull)
+  location      Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  alert         Alert?            @relation(fields: [alertId], references: [id], onDelete: SetNull)
+  camera        CctvCamera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  device        IotDevice?        @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  histories     IncidentHistory[]
+  subdistrict   Subdistrict?      @relation(fields: [subdistrictId], references: [id])
+  subdistrictId String?           @map("subdistrict_id") @db.Char(36)
+
+  @@index([status, severity, createdAt])
+  @@index([agencyId, status])
+  @@map("incidents")
+}
+
+model IncidentHistory {
+  id         BigInt   @id @default(autoincrement())
+  incidentId String   @map("incident_id") @db.Char(36)
+  status     String   @db.VarChar(40)
+  note       String?  @db.VarChar(1000)
+  actorId    String?  @map("actor_id") @db.Char(36)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@map("incident_histories")
+}
+
+model StatisticCategory {
+  id          String                @id @default(uuid()) @db.Char(36)
+  code        String                @unique @db.VarChar(80)
+  nameTh      String                @map("name_th") @db.VarChar(191)
+  nameEn      String?               @map("name_en") @db.VarChar(191)
+  definitions StatisticDefinition[]
+
+  @@map("statistic_categories")
+}
+
+model StatisticDefinition {
+  id         String            @id @default(uuid()) @db.Char(36)
+  categoryId String            @map("category_id") @db.Char(36)
+  metricKey  String            @unique @map("metric_key") @db.VarChar(120)
+  nameTh     String            @map("name_th") @db.VarChar(191)
+  nameEn     String?           @map("name_en") @db.VarChar(191)
+  unit       String?           @db.VarChar(40)
+  category   StatisticCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  values     StatisticValue[]
+
+  @@map("statistic_definitions")
+}
+
+model StatisticValue {
+  id           BigInt   @id @default(autoincrement())
+  definitionId String   @map("definition_id") @db.Char(36)
+  provinceId   String?  @map("province_id") @db.Char(36)
+  districtId   String?  @map("district_id") @db.Char(36)
+  periodStart  DateTime @map("period_start") @db.DateTime(3)
+  periodEnd    DateTime @map("period_end") @db.DateTime(3)
+  numericValue Decimal? @map("numeric_value") @db.Decimal(20, 6)
+  valueJson    Json?    @map("value_json")
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  definition StatisticDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  province   Province?           @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  district   District?           @relation(fields: [districtId], references: [id], onDelete: SetNull)
+
+  @@index([definitionId, periodStart, periodEnd])
+  @@index([districtId, periodStart])
+  @@map("statistic_values")
+}
+
+model News {
+  id          String    @id @default(uuid()) @db.Char(36)
+  publicId    String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  title       String    @db.VarChar(191)
+  summary     String?   @db.VarChar(1000)
+  body        String?   @db.Text
+  type        String    @db.VarChar(80)
+  status      String    @db.VarChar(40)
+  priority    String    @default("NORMAL") @db.VarChar(40)
+  isPinned    Boolean   @default(false) @map("is_pinned")
+  publishedAt DateTime? @map("published_at") @db.DateTime(3)
+  expiresAt   DateTime? @map("expires_at") @db.DateTime(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  @@index([status, isPinned, publishedAt])
+  @@map("news")
+}
+
+model AiConversation {
+  id            String    @id @default(uuid()) @db.Char(36)
+  publicId      String    @unique @default(uuid()) @map("public_id") @db.Char(36)
+  userId        String    @map("user_id") @db.Char(36)
+  title         String    @db.VarChar(191)
+  contextModule String?   @map("context_module") @db.VarChar(80)
+  lastMessageAt DateTime? @map("last_message_at") @db.DateTime(3)
+  isPinned      Boolean   @default(false) @map("is_pinned")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime? @map("deleted_at") @db.DateTime(3)
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([userId, updatedAt])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String   @id @default(uuid()) @db.Char(36)
+  conversationId String   @map("conversation_id") @db.Char(36)
+  role           String   @db.VarChar(40)
+  content        String   @db.Text
+  structuredJson Json?    @map("structured_json")
+  status         String   @default("COMPLETED") @db.VarChar(40)
+  createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  conversation AiConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sources      AiMessageSource[]
+
+  @@index([conversationId, createdAt])
+  @@map("ai_messages")
+}
+
+model AiMessageSource {
+  id              String    @id @default(uuid()) @db.Char(36)
+  messageId       String    @map("message_id") @db.Char(36)
+  sourceModule    String    @map("source_module") @db.VarChar(80)
+  sourceType      String    @map("source_type") @db.VarChar(80)
+  sourceName      String    @map("source_name") @db.VarChar(191)
+  sourceTimestamp DateTime? @map("source_timestamp") @db.DateTime(3)
+  sourceUrl       String?   @map("source_url") @db.VarChar(500)
+  metadata        Json?
+
+  message AiMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("ai_message_sources")
+}
+
+model AiSuggestedQuestion {
+  id         String   @id @default(uuid()) @db.Char(36)
+  module     String   @db.VarChar(80)
+  questionTh String   @map("question_th") @db.VarChar(500)
+  questionEn String?  @map("question_en") @db.VarChar(500)
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@index([module, isActive, sortOrder])
+  @@map("ai_suggested_questions")
+}

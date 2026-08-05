@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Digital Twin – Intelligent City Platform
 
-## Getting Started
+แพลตฟอร์มศูนย์บัญชาการเมืองอัจฉริยะสำหรับติดตามข้อมูลจังหวัด หน่วยงาน พื้นที่ปกครอง การแจ้งเตือน เหตุการณ์ และตัวชี้วัดสำคัญ โดย Phase 1 นี้เตรียม foundation, authentication/RBAC, master data, audit log และ demo seed data สำหรับการต่อยอด GIS, CCTV, IoT และ AI ใน phase ถัดไป
 
-First, run the development server:
+## สถานะ Phase 1
+
+- Next.js 16 App Router + TypeScript + Tailwind CSS 4
+- Thai-first responsive command-center dashboard shell
+- MariaDB/MySQL ผ่าน Prisma 7 และ `@prisma/adapter-mariadb`
+- HttpOnly access/refresh cookies, refresh-token rotation, session revocation และ account lockout
+- RBAC, data-scope foundation, user/role/agency/area CRUD
+- Audit logging สำหรับการกระทำสำคัญ
+- Full deterministic fictional Sing Buri demo seed data
+- CCTV/IoT/AI runtime workflows ยังไม่เปิดใช้งาน
+
+## ข้อกำหนดเครื่องมือ
+
+- Node.js 22+
+- MariaDB 11 หรือ MySQL 8
+- Redis เป็น optional สำหรับ development และควรมีใน production
+- ไม่ต้องใช้ Docker สำหรับ workflow นี้; service endpoints อ่านจาก `.env`
+
+## ติดตั้งและตั้งค่า
+
+```bash
+npm install
+cp .env.example .env
+```
+
+แก้ `DATABASE_URL`, secrets และ seed passwords ใน `.env` จากนั้นสร้าง database `digitaltwin` ใน MariaDB/MySQL และตรวจว่าบัญชีมีสิทธิ์สร้างตารางและ migration
+
+## Database commands
+
+```bash
+npm run db:generate
+npm run db:migrate:dev -- --name foundation
+npm run db:migrate:deploy
+
+# Seed เฉพาะ foundation
+npm run db:seed:minimal
+
+# Seed ข้อมูลสาธิตเต็มชุด
+npm run db:seed:demo
+
+# Reset ข้อมูลสาธิต (ต้องตั้ง ALLOW_DATABASE_RESET=true เอง)
+npm run db:seed:reset
+
+npm run db:studio
+```
+
+`db:seed:minimal` สร้าง roles, permissions, system settings และ Super Admin ส่วน `db:seed:demo` เพิ่มข้อมูลสาธิตจังหวัดสิงห์บุรีสำหรับ dashboard, CCTV metadata, IoT readings, alerts, incidents, statistics, news และ AI conversation records โดยไม่เรียก external AI API
+
+ห้ามใช้ `db:seed:reset` กับ production database เว้นแต่ได้รับอนุมัติและตั้ง `ALLOW_DATABASE_RESET=true` อย่างชัดเจน
+
+## Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# เปิด http://localhost:3000
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+เข้าใช้งานด้วย username ที่ seed ไว้ และ password จาก `SEED_SUPER_ADMIN_PASSWORD` หรือ `SEED_DEFAULT_USER_PASSWORD`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API foundation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Authentication:
 
-## Learn More
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/logout-all`
+- `GET /api/v1/auth/me`
 
-To learn more about Next.js, take a look at the following resources:
+Administration:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `/api/v1/users`
+- `/api/v1/roles`
+- `/api/v1/agencies`
+- `/api/v1/areas?type=province|district|subdistrict|village`
+- `/api/v1/dashboard/summary`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+ทุก API ใช้ response contract แบบ `success/data/message/meta`, Zod validation, server-side permission checks และ audit hooks สำหรับ sensitive actions
 
-## Deploy on Vercel
+## โครงสร้างสำคัญ
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+app/(auth)                 public login
+app/(protected)            authenticated shell and pages
+app/api/v1                 versioned Route Handlers
+components                 UI primitives, shell, dashboard, admin panels
+lib                        auth, Prisma, Redis, API, audit and query services
+prisma/schema.prisma       MariaDB/MySQL data model
+prisma/migrations          initial foundation migration
+prisma/seed.ts             minimal/demo/reset seed commands
+tests                      unit tests for foundation contracts
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+ข้อมูลสาธิตทั้งหมดเป็น fictional data สำหรับ development/demo เท่านั้น
