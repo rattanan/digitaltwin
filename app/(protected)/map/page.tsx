@@ -5,8 +5,9 @@ import { MapClient } from "@/components/map/map-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function MapPage() {
+export default async function MapPage({ searchParams }: { searchParams: Promise<{ feature?: string }> }) {
   const auth = await requirePageAuth("areas.read");
+  const params = await searchParams;
   const snapshot = await getMapSnapshot({ includeCameras: hasPermission(auth.user, "cctv.read") });
-  return <MapClient snapshot={snapshot} />;
+  return <MapClient snapshot={snapshot} initialFeatureId={params.feature ?? null} />;
 }

@@ -105,13 +105,13 @@ function InfoCell({ icon: Icon, label, value }: { icon: typeof MapPin; label: st
   return <div className="rounded-xl border border-white/[.07] bg-white/[.02] px-3 py-2.5"><p className="flex items-center gap-1.5 text-[10px] text-slate-600"><Icon className="size-3" />{label}</p><p className="mt-1 truncate text-xs text-slate-300">{value}</p></div>;
 }
 
-export function IotClient({ initialData, canManage }: { initialData: IotOverview; canManage: boolean }) {
+export function IotClient({ initialData, canManage, initialSelectedId = null }: { initialData: IotOverview; canManage: boolean; initialSelectedId?: string | null }) {
   const [data, setData] = useState(initialData);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | IotStatus>("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [districtFilter, setDistrictFilter] = useState("ALL");
-  const [selectedId, setSelectedId] = useState<string | null>(initialData.items[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? initialData.items[0]?.id ?? null);
   const [detail, setDetail] = useState<IotDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -162,7 +162,7 @@ export function IotClient({ initialData, canManage }: { initialData: IotOverview
     await loadPage(data.pagination.page);
   }
 
-  async function selectDevice(id: string) {
+  const selectDevice = useCallback(async (id: string) => {
     setSelectedId(id);
     setLoadingDetail(true);
     setError("");
@@ -174,7 +174,11 @@ export function IotClient({ initialData, canManage }: { initialData: IotOverview
     } finally {
       setLoadingDetail(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (initialSelectedId) void selectDevice(initialSelectedId);
+  }, [initialSelectedId, selectDevice]);
 
   async function updateStatus(status: IotStatus) {
     if (!detail) return;

@@ -110,7 +110,7 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
       includeCameras
         ? prisma.cctvCamera.findMany({
             where: { provinceId: province.id, deletedAt: null, latitude: { not: null }, longitude: { not: null } },
-            select: { id: true, cameraCode: true, nameTh: true, nameEn: true, status: true, latitude: true, longitude: true, lastHeartbeat: true, district: { select: { nameTh: true } } },
+            select: { id: true, cameraCode: true, nameTh: true, nameEn: true, status: true, latitude: true, longitude: true, lastHeartbeat: true, district: { select: { id: true, nameTh: true } } },
             orderBy: { cameraCode: "asc" },
           })
         : Promise.resolve([]),

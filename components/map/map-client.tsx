@@ -177,7 +177,7 @@ function createPopupContent(feature: MapFeature) {
   return root;
 }
 
-export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
+export function MapClient({ snapshot, initialFeatureId = null }: { snapshot: MapSnapshot; initialFeatureId?: string | null }) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const maplibreRef = useRef<MapLibreModule | null>(null);
@@ -188,7 +188,7 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
   const [mapError, setMapError] = useState("");
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("name");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialFeatureId);
   const [activeLayers, setActiveLayers] = useState<Record<MapLayerId, boolean>>({
     districts: true,
     subdistricts: false,
