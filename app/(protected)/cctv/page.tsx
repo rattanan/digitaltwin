@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 
 export default async function CctvPage() {
   const auth = await requirePageAuth("cctv.read");
-  const overview = await getCctvOverview({ limit: 100 });
+  const overview = await getCctvOverview({ page: 1, limit: 12 });
   return <CctvClient initialData={overview} canManage={hasPermission(auth.user, "cctv.manage")} />;
 }

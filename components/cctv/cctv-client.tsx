@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, Camera, Check, Clock3, Eye, ImageOff, Map, MapPin, RefreshCw, Search, ShieldAlert, Trash2, Wifi, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn, formatDateTime, formatNumber } from "@/lib/utils";
+import { ListPagination } from "@/components/common/list-pagination";
 import { CCTV_STATUS_LABELS, CCTV_STATUSES, type CctvDetail, type CctvOverview, type CctvStatus } from "@/lib/cctv/types";
 
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string };
+type CctvListResponse = Omit<CctvOverview, "pagination"> & { pagination?: CctvOverview["pagination"] };
+
+const CCTV_PAGE_SIZE = 12;
 
 async function api<T>(url: string, options?: RequestInit) {
   const response = await fetch(url, { ...options, headers: { "content-type": "application/json", ...(options?.headers ?? {}) } });
@@ -105,28 +109,49 @@ export function CctvClient({ initialData, canManage }: { initialData: CctvOvervi
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const firstFilterRender = useRef(true);
 
-  const visibleCameras = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase("th-TH");
-    return data.items.filter((camera) => {
-      const matchesStatus = statusFilter === "ALL" || camera.status === statusFilter;
-      const matchesDistrict = districtFilter === "ALL" || camera.district?.id === districtFilter;
-      const matchesSearch = !normalizedSearch || [camera.cameraCode, camera.nameTh, camera.nameEn, camera.district?.nameTh, camera.locationName].filter(Boolean).some((value) => value!.toLocaleLowerCase("th-TH").includes(normalizedSearch));
-      return matchesStatus && matchesDistrict && matchesSearch;
-    });
-  }, [data.items, districtFilter, search, statusFilter]);
-
-  async function refresh() {
+  const loadPage = useCallback(async (nextPage: number) => {
     setLoading(true);
     setError("");
     try {
-      const next = await api<Omit<CctvOverview, "pagination"> & { pagination?: CctvOverview["pagination"] }>("/api/v1/cctv?limit=100");
-      setData({ ...next, pagination: next.pagination ?? { page: 1, limit: 100, total: next.items.length } });
-    } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "โหลดข้อมูล CCTV ไม่สำเร็จ");
+      let pageToLoad = Math.max(1, nextPage);
+      while (true) {
+        const params = new URLSearchParams({ page: String(pageToLoad), limit: String(CCTV_PAGE_SIZE) });
+        if (search.trim()) params.set("search", search.trim());
+        if (statusFilter !== "ALL") params.set("status", statusFilter);
+        if (districtFilter !== "ALL") params.set("districtId", districtFilter);
+
+        const next = await api<CctvListResponse>(`/api/v1/cctv?${params.toString()}`);
+        const pagination = next.pagination ?? { page: pageToLoad, limit: CCTV_PAGE_SIZE, total: next.items.length };
+        const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
+        if (pagination.total > 0 && pageToLoad > totalPages) {
+          pageToLoad = totalPages;
+          continue;
+        }
+        setData({ ...next, pagination });
+        setDetail(null);
+        setSelectedId(next.items[0]?.id ?? null);
+        break;
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดข้อมูล CCTV ไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
+  }, [districtFilter, search, statusFilter]);
+
+  useEffect(() => {
+    if (firstFilterRender.current) {
+      firstFilterRender.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => { void loadPage(1); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [loadPage]);
+
+  async function refresh() {
+    await loadPage(data.pagination.page);
   }
 
   async function selectCamera(id: string) {
@@ -158,6 +183,7 @@ export function CctvClient({ initialData, canManage }: { initialData: CctvOvervi
     await refresh();
   }
 
+  const visibleCameras = data.items;
   const selectedSummary = data.items.find((camera) => camera.id === selectedId) ?? null;
 
   return <div className="space-y-5">
@@ -168,7 +194,7 @@ export function CctvClient({ initialData, canManage }: { initialData: CctvOvervi
     {error && <div role="alert" className="flex items-center justify-between rounded-xl border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="ปิดข้อความ">×</button></div>}
 
     <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_420px]">
-      <Card className="overflow-hidden"><CardHeader className="gap-4 border-b border-white/[.07]"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><CardTitle className="flex items-center gap-2 text-base"><Eye className="size-4 text-cyan-200" />รายการกล้อง</CardTitle><p className="mt-1 text-xs text-slate-500">เลือกกล้องเพื่อเปิดภาพ metadata และ AI events ล่าสุด</p></div><Badge variant="neutral">{formatNumber(visibleCameras.length)} / {formatNumber(data.items.length)} รายการ</Badge></div><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px_190px]"><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-600" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือรหัสกล้อง..." className="pl-9" aria-label="ค้นหากล้อง CCTV" /></label><Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "ALL" | CctvStatus)} aria-label="กรองสถานะ"><option value="ALL">ทุกสถานะ</option>{CCTV_STATUSES.map((status) => <option key={status} value={status}>{CCTV_STATUS_LABELS[status]}</option>)}</Select><Select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)} aria-label="กรองอำเภอ"><option value="ALL">ทุกอำเภอ</option>{data.districts.map((district) => <option key={district.id} value={district.id}>{district.nameTh} ({district.cameraCount})</option>)}</Select></div></CardHeader><CardContent className="p-3 sm:p-5"><div className="grid gap-3 md:grid-cols-2">{visibleCameras.map((camera) => <CameraCard key={camera.id} camera={camera} selected={camera.id === selectedId} onSelect={() => void selectCamera(camera.id)} />)}</div>{visibleCameras.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 px-4 py-14 text-center"><Camera className="mx-auto size-8 text-slate-700" /><p className="mt-3 text-sm text-slate-400">ไม่พบกล้องตามตัวกรอง</p><p className="mt-1 text-xs text-slate-600">ลองเปลี่ยนสถานะ อำเภอ หรือคำค้นหา</p></div>}</CardContent></Card>
+      <Card className="overflow-hidden"><CardHeader className="gap-4 border-b border-white/[.07]"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><CardTitle className="flex items-center gap-2 text-base"><Eye className="size-4 text-cyan-200" />รายการกล้อง</CardTitle><p className="mt-1 text-xs text-slate-500">เลือกกล้องเพื่อเปิดภาพ metadata และ AI events ล่าสุด</p></div><Badge variant="neutral">{formatNumber(visibleCameras.length)} / {formatNumber(data.pagination.total)} รายการ</Badge></div><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px_190px]"><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-600" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือรหัสกล้อง..." className="pl-9" aria-label="ค้นหากล้อง CCTV" /></label><Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "ALL" | CctvStatus)} aria-label="กรองสถานะ"><option value="ALL">ทุกสถานะ</option>{CCTV_STATUSES.map((status) => <option key={status} value={status}>{CCTV_STATUS_LABELS[status]}</option>)}</Select><Select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)} aria-label="กรองอำเภอ"><option value="ALL">ทุกอำเภอ</option>{data.districts.map((district) => <option key={district.id} value={district.id}>{district.nameTh} ({district.cameraCount})</option>)}</Select></div></CardHeader><CardContent className="p-3 sm:p-5"><div className="grid gap-3 md:grid-cols-2">{visibleCameras.map((camera) => <CameraCard key={camera.id} camera={camera} selected={camera.id === selectedId} onSelect={() => void selectCamera(camera.id)} />)}</div>{visibleCameras.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 px-4 py-14 text-center"><Camera className="mx-auto size-8 text-slate-700" /><p className="mt-3 text-sm text-slate-400">ไม่พบกล้องตามตัวกรอง</p><p className="mt-1 text-xs text-slate-600">ลองเปลี่ยนสถานะ อำเภอ หรือคำค้นหา</p></div>}</CardContent>{data.pagination.total > data.pagination.limit && <div className="border-t border-white/[.07] px-3 py-3 sm:px-5"><ListPagination pagination={data.pagination} loading={loading} label="กล้อง CCTV" onPageChange={(page) => void loadPage(page)} /></div>}</Card>
 
       <Card className="min-w-0"><CardHeader className="border-b border-white/[.07]"><CardTitle className="flex items-center gap-2 text-base"><Activity className="size-4 text-cyan-200" />รายละเอียดกล้อง</CardTitle><p className="mt-1 text-xs text-slate-500">ข้อมูลจาก CCTV metadata, snapshots และ AI result</p></CardHeader><CardContent className="p-4 sm:p-5" aria-live="polite">{loadingDetail ? <div className="flex min-h-[420px] items-center justify-center text-center"><RefreshCw className="size-6 animate-spin motion-reduce:animate-none text-cyan-200" /><span className="ml-3 text-sm text-slate-400">กำลังโหลดรายละเอียด...</span></div> : detail ? <DetailPanel key={detail.id} detail={detail} canManage={canManage} onStatusSave={updateStatus} onDelete={deleteCamera} /> : selectedSummary ? <div className="space-y-4"><SnapshotPreview camera={selectedSummary} large /><div className="rounded-xl border border-dashed border-white/10 px-4 py-6 text-center"><p className="text-sm text-slate-300">กดรายการกล้องเพื่อโหลดรายละเอียด</p><Button className="mt-4" size="sm" onClick={() => void selectCamera(selectedSummary.id)}><Eye className="size-3.5" />เปิดรายละเอียด</Button></div></div> : <div className="flex min-h-[420px] flex-col items-center justify-center text-center"><Camera className="size-10 text-slate-700" /><p className="mt-4 text-sm text-slate-400">ยังไม่ได้เลือกกล้อง</p><p className="mt-1 text-xs text-slate-600">เลือกกล้องจากรายการด้านซ้าย</p></div>}</CardContent></Card>
     </section>

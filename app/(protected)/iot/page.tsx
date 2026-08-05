@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 
 export default async function IotPage() {
   const auth = await requirePageAuth("iot.read");
-  const overview = await getIotOverview({ limit: 100 });
+  const overview = await getIotOverview({ page: 1, limit: 12 });
   return <IotClient initialData={overview} canManage={hasPermission(auth.user, "iot.manage")} />;
 }

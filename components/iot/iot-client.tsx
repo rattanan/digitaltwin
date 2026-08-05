@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BatteryLow, Check, Eye, Map, MapPin, RadioTower, RefreshCw, Search, Signal, Trash2, Wifi, Wrench } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
@@ -10,9 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn, formatDateTime, formatNumber } from "@/lib/utils";
+import { ListPagination } from "@/components/common/list-pagination";
 import { IOT_METRIC_STATE_LABELS, IOT_STATUSES, IOT_STATUS_LABELS, type IotDetail, type IotMetricState, type IotOverview, type IotStatus } from "@/lib/iot/types";
 
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string };
+type IotListResponse = Omit<IotOverview, "pagination"> & { pagination?: IotOverview["pagination"] };
+
+const IOT_PAGE_SIZE = 12;
 
 async function api<T>(url: string, options?: RequestInit) {
   const response = await fetch(url, { ...options, headers: { "content-type": "application/json", ...(options?.headers ?? {}) } });
@@ -112,29 +116,50 @@ export function IotClient({ initialData, canManage }: { initialData: IotOverview
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const firstFilterRender = useRef(true);
 
-  const visibleDevices = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase("th-TH");
-    return data.items.filter((device) => {
-      const matchesStatus = statusFilter === "ALL" || device.status === statusFilter;
-      const matchesType = typeFilter === "ALL" || device.type.id === typeFilter;
-      const matchesDistrict = districtFilter === "ALL" || device.district?.id === districtFilter;
-      const matchesSearch = !normalizedSearch || [device.deviceCode, device.nameTh, device.type.nameTh, device.district?.nameTh, device.locationName].filter(Boolean).some((value) => value!.toLocaleLowerCase("th-TH").includes(normalizedSearch));
-      return matchesStatus && matchesType && matchesDistrict && matchesSearch;
-    });
-  }, [data.items, districtFilter, search, statusFilter, typeFilter]);
-
-  async function refresh() {
+  const loadPage = useCallback(async (nextPage: number) => {
     setLoading(true);
     setError("");
     try {
-      const next = await api<Omit<IotOverview, "pagination"> & { pagination?: IotOverview["pagination"] }>("/api/v1/iot?limit=100");
-      setData({ ...next, pagination: next.pagination ?? { page: 1, limit: 100, total: next.items.length } });
-    } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "โหลดข้อมูล IoT ไม่สำเร็จ");
+      let pageToLoad = Math.max(1, nextPage);
+      while (true) {
+        const params = new URLSearchParams({ page: String(pageToLoad), limit: String(IOT_PAGE_SIZE) });
+        if (search.trim()) params.set("search", search.trim());
+        if (statusFilter !== "ALL") params.set("status", statusFilter);
+        if (typeFilter !== "ALL") params.set("typeId", typeFilter);
+        if (districtFilter !== "ALL") params.set("districtId", districtFilter);
+
+        const next = await api<IotListResponse>(`/api/v1/iot?${params.toString()}`);
+        const pagination = next.pagination ?? { page: pageToLoad, limit: IOT_PAGE_SIZE, total: next.items.length };
+        const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
+        if (pagination.total > 0 && pageToLoad > totalPages) {
+          pageToLoad = totalPages;
+          continue;
+        }
+        setData({ ...next, pagination });
+        setDetail(null);
+        setSelectedId(next.items[0]?.id ?? null);
+        break;
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "โหลดข้อมูล IoT ไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
+  }, [districtFilter, search, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    if (firstFilterRender.current) {
+      firstFilterRender.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => { void loadPage(1); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [loadPage]);
+
+  async function refresh() {
+    await loadPage(data.pagination.page);
   }
 
   async function selectDevice(id: string) {
@@ -166,6 +191,7 @@ export function IotClient({ initialData, canManage }: { initialData: IotOverview
     await refresh();
   }
 
+  const visibleDevices = data.items;
   const selectedSummary = data.items.find((device) => device.id === selectedId) ?? null;
 
   return <div className="space-y-5">
@@ -176,7 +202,7 @@ export function IotClient({ initialData, canManage }: { initialData: IotOverview
     {error && <div role="alert" className="flex items-center justify-between rounded-xl border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200"><span>{error}</span><button type="button" onClick={() => setError("")} aria-label="ปิดข้อความ">×</button></div>}
 
     <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_440px]">
-      <Card className="overflow-hidden"><CardHeader className="gap-4 border-b border-white/[.07]"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><CardTitle className="flex items-center gap-2 text-base"><Eye className="size-4 text-emerald-200" />รายการอุปกรณ์</CardTitle><p className="mt-1 text-xs text-slate-500">เลือกอุปกรณ์เพื่อดู telemetry และแนวโน้มค่าล่าสุด</p></div><Badge variant="neutral">{formatNumber(visibleDevices.length)} / {formatNumber(data.items.length)} รายการ</Badge></div><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px_170px_170px]"><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-600" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือรหัสอุปกรณ์..." className="pl-9" aria-label="ค้นหาอุปกรณ์ IoT" /></label><Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "ALL" | IotStatus)} aria-label="กรองสถานะ"><option value="ALL">ทุกสถานะ</option>{IOT_STATUSES.map((status) => <option key={status} value={status}>{IOT_STATUS_LABELS[status]}</option>)}</Select><Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="กรองชนิดอุปกรณ์"><option value="ALL">ทุกชนิด</option>{data.types.map((type) => <option key={type.id} value={type.id}>{type.nameTh} ({type.deviceCount})</option>)}</Select><Select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)} aria-label="กรองอำเภอ"><option value="ALL">ทุกอำเภอ</option>{data.districts.map((district) => <option key={district.id} value={district.id}>{district.nameTh} ({district.deviceCount})</option>)}</Select></div></CardHeader><CardContent className="p-3 sm:p-5"><div className="grid gap-3 md:grid-cols-2">{visibleDevices.map((device) => <DeviceCard key={device.id} device={device} selected={device.id === selectedId} onSelect={() => void selectDevice(device.id)} />)}</div>{visibleDevices.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 px-4 py-14 text-center"><RadioTower className="mx-auto size-8 text-slate-700" /><p className="mt-3 text-sm text-slate-400">ไม่พบอุปกรณ์ตามตัวกรอง</p><p className="mt-1 text-xs text-slate-600">ลองเปลี่ยนสถานะ ชนิด อำเภอ หรือคำค้นหา</p></div>}</CardContent></Card>
+      <Card className="overflow-hidden"><CardHeader className="gap-4 border-b border-white/[.07]"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><CardTitle className="flex items-center gap-2 text-base"><Eye className="size-4 text-emerald-200" />รายการอุปกรณ์</CardTitle><p className="mt-1 text-xs text-slate-500">เลือกอุปกรณ์เพื่อดู telemetry และแนวโน้มค่าล่าสุด</p></div><Badge variant="neutral">{formatNumber(visibleDevices.length)} / {formatNumber(data.pagination.total)} รายการ</Badge></div><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px_170px_170px]"><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-600" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือรหัสอุปกรณ์..." className="pl-9" aria-label="ค้นหาอุปกรณ์ IoT" /></label><Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "ALL" | IotStatus)} aria-label="กรองสถานะ"><option value="ALL">ทุกสถานะ</option>{IOT_STATUSES.map((status) => <option key={status} value={status}>{IOT_STATUS_LABELS[status]}</option>)}</Select><Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="กรองชนิดอุปกรณ์"><option value="ALL">ทุกชนิด</option>{data.types.map((type) => <option key={type.id} value={type.id}>{type.nameTh} ({type.deviceCount})</option>)}</Select><Select value={districtFilter} onChange={(event) => setDistrictFilter(event.target.value)} aria-label="กรองอำเภอ"><option value="ALL">ทุกอำเภอ</option>{data.districts.map((district) => <option key={district.id} value={district.id}>{district.nameTh} ({district.deviceCount})</option>)}</Select></div></CardHeader><CardContent className="p-3 sm:p-5"><div className="grid gap-3 md:grid-cols-2">{visibleDevices.map((device) => <DeviceCard key={device.id} device={device} selected={device.id === selectedId} onSelect={() => void selectDevice(device.id)} />)}</div>{visibleDevices.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 px-4 py-14 text-center"><RadioTower className="mx-auto size-8 text-slate-700" /><p className="mt-3 text-sm text-slate-400">ไม่พบอุปกรณ์ตามตัวกรอง</p><p className="mt-1 text-xs text-slate-600">ลองเปลี่ยนสถานะ ชนิด อำเภอ หรือคำค้นหา</p></div>}</CardContent>{data.pagination.total > data.pagination.limit && <div className="border-t border-white/[.07] px-3 py-3 sm:px-5"><ListPagination pagination={data.pagination} loading={loading} label="อุปกรณ์ IoT" onPageChange={(page) => void loadPage(page)} /></div>}</Card>
 
       <Card className="min-w-0"><CardHeader className="border-b border-white/[.07]"><CardTitle className="flex items-center gap-2 text-base"><Activity className="size-4 text-emerald-200" />รายละเอียดอุปกรณ์</CardTitle><p className="mt-1 text-xs text-slate-500">ข้อมูลจาก device metadata, latest values และ readings</p></CardHeader><CardContent className="p-4 sm:p-5" aria-live="polite">{loadingDetail ? <div className="flex min-h-[520px] items-center justify-center text-center"><RefreshCw className="size-6 animate-spin motion-reduce:animate-none text-emerald-200" /><span className="ml-3 text-sm text-slate-400">กำลังโหลดรายละเอียด...</span></div> : detail ? <DetailPanel key={detail.id} detail={detail} canManage={canManage} onStatusSave={updateStatus} onDelete={deleteDevice} /> : selectedSummary ? <div className="flex min-h-[520px] flex-col items-center justify-center rounded-xl border border-dashed border-white/10 px-4 text-center"><RadioTower className="size-10 text-slate-700" /><p className="mt-4 text-sm text-slate-300">{selectedSummary.nameTh}</p><p className="mt-1 text-xs text-slate-600">เลือกเพื่อโหลด telemetry รายละเอียด</p><Button className="mt-4" size="sm" onClick={() => void selectDevice(selectedSummary.id)}><Eye className="size-3.5" />เปิดรายละเอียด</Button></div> : <div className="flex min-h-[520px] flex-col items-center justify-center text-center"><RadioTower className="size-10 text-slate-700" /><p className="mt-4 text-sm text-slate-400">ยังไม่ได้เลือกอุปกรณ์</p><p className="mt-1 text-xs text-slate-600">เลือกอุปกรณ์จากรายการด้านซ้าย</p></div>}</CardContent></Card>
     </section>

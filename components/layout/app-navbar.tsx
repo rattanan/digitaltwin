@@ -9,9 +9,14 @@ import { Button } from "@/components/ui/button";
 type ShellUser = { displayName: string; username: string; agency?: { nameTh: string } | null; roles: { code: string; nameTh: string }[] };
 
 function LiveClock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer); }, []);
-  return <div className="hidden text-right sm:block"><p className="text-sm font-semibold text-white">{new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(now)}</p><p className="font-mono text-xs text-[var(--nt-blue-light)]/80">{new Intl.DateTimeFormat("th-TH", { timeStyle: "medium", timeZone: "Asia/Bangkok" }).format(now)} น.</p></div>;
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const update = () => setNow(new Date());
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return <div className="hidden text-right sm:block"><p className="text-sm font-semibold text-white">{now ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(now) : "—"}</p><p className="font-mono text-xs text-[var(--nt-blue-light)]/80">{now ? `${new Intl.DateTimeFormat("th-TH", { timeStyle: "medium", timeZone: "Asia/Bangkok" }).format(now)} น.` : "—"}</p></div>;
 }
 
 export function AppNavbar({ user, onOpenMenu }: { user: ShellUser; onOpenMenu: () => void }) {

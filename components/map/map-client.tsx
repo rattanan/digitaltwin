@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Map as MapLibreMap, Marker as MapLibreMarker, Popup as MapLibrePopup } from "maplibre-gl";
+import type { Map as MapLibreMap, Marker as MapLibreMarker, Popup as MapLibrePopup, StyleSpecification } from "maplibre-gl";
 import { LocateFixed, MapPin, Maximize2, Search, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,23 @@ type MapFeature = {
 
 type SortMode = "name" | "status" | "type";
 
-const mapStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? "https://demotiles.maplibre.org/style.json";
+const mapStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || "https://demotiles.maplibre.org/style.json";
+
+const fallbackMapStyle: StyleSpecification = {
+  version: 8,
+  sources: {
+    openstreetmap: {
+      type: "raster",
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors",
+    },
+  },
+  layers: [
+    { id: "fallback-background", type: "background", paint: { "background-color": "#081726" } },
+    { id: "openstreetmap", type: "raster", source: "openstreetmap", paint: { "raster-opacity": 0.78 } },
+  ],
+};
 
 const layerOptions: { id: MapLayerId; label: string; color: string }[] = [
   { id: "districts", label: "อำเภอ", color: "bg-cyan-300" },
@@ -218,6 +234,30 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
     let disposed = false;
     let map: MapLibreMap | null = null;
     let hasLoaded = false;
+    let fallbackActive = false;
+    let loadTimeout: number | undefined;
+
+    const markMapReady = () => {
+      if (disposed || hasLoaded) return;
+      hasLoaded = true;
+      if (loadTimeout !== undefined) window.clearTimeout(loadTimeout);
+      setMapReady(true);
+      setMapLoading(false);
+      fitToData();
+    };
+
+    const activateFallbackStyle = (message: string) => {
+      const currentMap = map;
+      if (disposed || fallbackActive || !currentMap) return;
+      fallbackActive = true;
+      setMapError(`${message} กำลังใช้แผนที่สำรอง`);
+      try {
+        currentMap.setStyle(fallbackMapStyle);
+      } catch (error) {
+        setMapLoading(false);
+        setMapError(error instanceof Error ? error.message : message);
+      }
+    };
 
     async function initializeMap() {
       try {
@@ -239,16 +279,16 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
         map.addControl(new maplibre.AttributionControl({ compact: true }), "bottom-right");
         const clearSelection = () => setSelectedId(null);
         map.on("click", clearSelection);
+        map.on("load", markMapReady);
+        map.on("style.load", markMapReady);
         map.on("error", (event) => {
-          if (!hasLoaded && event.error) setMapError("ไม่สามารถโหลดแผนที่พื้นฐานได้ กรุณาตรวจสอบการเชื่อมต่อหรือ MAP_STYLE_URL");
+          if (disposed || hasLoaded || !event.error) return;
+          if (!fallbackActive) activateFallbackStyle("ไม่สามารถโหลดแผนที่พื้นฐานได้");
+          else setMapLoading(false);
         });
-        map.once("load", () => {
-          if (disposed || !map) return;
-          hasLoaded = true;
-          setMapReady(true);
-          setMapLoading(false);
-          fitToData();
-        });
+        loadTimeout = window.setTimeout(() => {
+          if (!hasLoaded && !fallbackActive) activateFallbackStyle("โหลดแผนที่พื้นฐานนานเกินไป");
+        }, 8000);
       } catch (error) {
         if (disposed) return;
         setMapLoading(false);
@@ -259,6 +299,7 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
     void initializeMap();
     return () => {
       disposed = true;
+      if (loadTimeout !== undefined) window.clearTimeout(loadTimeout);
       popupRef.current?.remove();
       popupRef.current = null;
       markersRef.current.forEach((marker) => marker.remove());
