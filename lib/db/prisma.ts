@@ -13,6 +13,8 @@ function createPrismaClient() {
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database,
+    charset: process.env.DATABASE_CHARSET ?? "utf8mb4",
+    collation: process.env.DATABASE_COLLATION ?? "utf8mb4_unicode_ci",
     connectionLimit: Number(process.env.DATABASE_CONNECTION_LIMIT ?? 10),
     connectTimeout: Number(process.env.DATABASE_CONNECT_TIMEOUT ?? 10_000),
   });
