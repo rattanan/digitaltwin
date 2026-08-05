@@ -34,6 +34,7 @@ type MapFeature = {
 type SortMode = "name" | "status" | "type";
 
 const mapStyle = process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || "https://demotiles.maplibre.org/style.json";
+const mapWorkerUrl = process.env.NEXT_PUBLIC_MAP_WORKER_URL?.trim() || "https://unpkg.com/maplibre-gl@6.1.0/dist/maplibre-gl-worker.mjs";
 
 const fallbackMapStyle: StyleSpecification = {
   version: 8,
@@ -264,6 +265,7 @@ export function MapClient({ snapshot }: { snapshot: MapSnapshot }) {
         const maplibre = await import("maplibre-gl");
         if (disposed || !mapContainerRef.current) return;
         maplibreRef.current = maplibre;
+        maplibre.setWorkerUrl(mapWorkerUrl);
         map = new maplibre.Map({
           container: mapContainerRef.current,
           style: mapStyle,
