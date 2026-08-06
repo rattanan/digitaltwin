@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDemoMapSnapshot } from "@/lib/map/demo-data";
+import { createSpiderfyPoints } from "@/lib/map/spiderfy";
 
 describe("map foundation data", () => {
   it("returns the administrative and important-location layers", () => {
@@ -39,5 +40,17 @@ describe("map foundation data", () => {
     expect(snapshot.capabilities).toMatchObject({ cameras: false, iot: true, alerts: false, incidents: false });
     expect(snapshot.counts).toMatchObject({ cameras: 0, iot: 3, alerts: 0, incidents: 0 });
     expect(snapshot.commandFeatures.some((feature) => feature.kind === "CCTV" || feature.kind === "ALERT" || feature.kind === "INCIDENT")).toBe(false);
+  });
+
+  it("spreads overlapping terminal markers into selectable positions", () => {
+    const points = createSpiderfyPoints({ count: 12, anchorX: 400, anchorY: 300, viewportWidth: 800, viewportHeight: 600 });
+    expect(points).toHaveLength(12);
+    expect(new Set(points.map((point) => `${point.x.toFixed(2)}:${point.y.toFixed(2)}`))).toHaveLength(12);
+    expect(points.every((point) => point.x >= 52 && point.x <= 748 && point.y >= 52 && point.y <= 548)).toBe(true);
+  });
+
+  it("keeps spiderfied markers inside the viewport near an edge", () => {
+    const points = createSpiderfyPoints({ count: 8, anchorX: 4, anchorY: 4, viewportWidth: 360, viewportHeight: 560 });
+    expect(points.every((point) => point.x >= 52 && point.x <= 308 && point.y >= 52 && point.y <= 508)).toBe(true);
   });
 });

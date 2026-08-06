@@ -8,6 +8,7 @@ import { Activity, BellRing, Camera, ChevronRight, CircleAlert, CloudRain, Dropl
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { createSpiderfyPoints } from "@/lib/map/spiderfy";
 import { cn, formatDateTime, formatNumber } from "@/lib/utils";
 import type { CommandMapFeature, CommandMapKind, MapMarkerStatus, MapSnapshot } from "@/lib/map/types";
 
@@ -20,7 +21,7 @@ type BoundaryFeature = {
 type BoundaryCollection = { type: "FeatureCollection"; features: BoundaryFeature[] };
 type MapApiPayload = { success?: boolean; data?: MapSnapshot; message?: string };
 type ProjectedDistrict = { code: string; name: string; path: string; labelX: number; labelY: number };
-type ProjectedMarker = { x: number; y: number; featureIds: string[] };
+type ProjectedMarker = { x: number; y: number; featureIds: string[]; anchorX?: number; anchorY?: number };
 
 const fallbackStyle: StyleSpecification = {
   version: 8,
@@ -247,7 +248,20 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
       }
     });
     setProjectedDistricts(districts);
-    setProjectedMarkers(groups.map((group) => ({ x: group.x, y: group.y, featureIds: group.items.map((item) => item.feature.id) })));
+    const terminalZoom = zoom >= Math.min(16, map.getMaxZoom() - 0.15);
+    setProjectedMarkers(groups.flatMap((group) => {
+      if (!terminalZoom || group.items.length === 1) {
+        return [{ x: group.x, y: group.y, featureIds: group.items.map((item) => item.feature.id) }];
+      }
+      const points = createSpiderfyPoints({ count: group.items.length, anchorX: group.x, anchorY: group.y, viewportWidth: width, viewportHeight: height });
+      return group.items.map((item, index) => ({
+        x: points[index].x,
+        y: points[index].y,
+        anchorX: group.x,
+        anchorY: group.y,
+        featureIds: [item.feature.id],
+      }));
+    }));
   }, []);
 
   useEffect(() => {
@@ -367,6 +381,9 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
           <path d={district.path} className={cn("pointer-events-auto cursor-pointer transition-[fill,stroke,opacity] duration-200", selectedDistrict?.code === district.code ? "fill-cyan-300/30 stroke-cyan-100" : "fill-cyan-700/20 stroke-cyan-300/80 hover:fill-cyan-400/25 hover:stroke-cyan-100")} strokeWidth={selectedDistrict?.code === district.code ? 2.8 : 1.8} onClick={() => selectBoundary(district.code)} onMouseEnter={() => setHoveredDistrict(district.name)} onMouseLeave={() => setHoveredDistrict("")} />
           <text x={district.labelX} y={district.labelY} textAnchor="middle" className="select-none fill-cyan-50/80 text-[10px] font-medium [paint-order:stroke] [stroke:#06111e] [stroke-width:3px]">{district.name}</text>
         </g>)}
+      </svg>
+      <svg className="pointer-events-none absolute inset-0 z-[7] size-full overflow-hidden" aria-hidden="true">
+        {projectedMarkers.flatMap((marker) => marker.anchorX === undefined || marker.anchorY === undefined ? [] : <line key={`spider:${marker.featureIds[0]}`} x1={marker.anchorX} y1={marker.anchorY} x2={marker.x} y2={marker.y} stroke="rgba(207,250,254,.42)" strokeWidth="1.5" strokeDasharray="3 4" />)}
       </svg>
       <div className="pointer-events-none absolute inset-0 z-[8]">{projectedMarkers.map((marker) => {
         const features = marker.featureIds.flatMap((id) => snapshot.commandFeatures.find((feature) => feature.id === id) ?? []);
