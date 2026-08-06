@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, Camera, Check, Clock3, Eye, ImageOff, Map, MapPin, RefreshCw, Search, ShieldAlert, Trash2, Wifi, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { cn, formatDateTime, formatNumber } from "@/lib/utils";
 import { ListPagination } from "@/components/common/list-pagination";
 import { CCTV_STATUS_LABELS, CCTV_STATUSES, type CctvDetail, type CctvOverview, type CctvStatus } from "@/lib/cctv/types";
+import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
 
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string };
 type CctvListResponse = Omit<CctvOverview, "pagination"> & { pagination?: CctvOverview["pagination"] };
@@ -45,11 +47,14 @@ function CameraStatus({ status }: { status: CctvStatus }) {
 }
 
 function SnapshotPreview({ camera, large = false }: { camera: CctvOverview["items"][number]; large?: boolean }) {
-  return <div className={cn("relative overflow-hidden rounded-xl border border-cyan-200/10 bg-[#071725]", large ? "aspect-video" : "aspect-[16/10]")}>
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(34,211,238,.24),transparent_20%),linear-gradient(135deg,rgba(15,23,42,.1),rgba(8,47,73,.85)),repeating-linear-gradient(0deg,rgba(148,163,184,.08)_0px,rgba(148,163,184,.08)_1px,transparent_1px,transparent_5px)]" />
+  const previewImage = getCctvPreviewImage(camera.cameraCode);
+
+  return <div className={cn("relative aspect-[4/3] overflow-hidden rounded-xl border border-cyan-200/10 bg-[#071725]")}>
+    {previewImage ? <Image src={previewImage} alt={`ภาพ Preview จาก ${camera.cameraCode}`} fill sizes={large ? "(max-width: 1280px) 100vw, 420px" : "(max-width: 768px) 100vw, 50vw"} className="object-cover" priority={large} /> : <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(34,211,238,.24),transparent_20%),linear-gradient(135deg,rgba(15,23,42,.1),rgba(8,47,73,.85)),repeating-linear-gradient(0deg,rgba(148,163,184,.08)_0px,rgba(148,163,184,.08)_1px,transparent_1px,transparent_5px)]" />}
+    {previewImage && <div className="absolute inset-0 bg-gradient-to-b from-slate-950/35 via-transparent to-slate-950/70" />}
     <div className="absolute inset-x-4 top-4 flex items-center justify-between text-[9px] font-mono uppercase tracking-[.16em] text-cyan-100/70"><span>Snapshot / {camera.cameraCode}</span><span className="flex items-center gap-1.5"><i className={cn("size-1.5 rounded-full", camera.status === "ONLINE" ? "animate-pulse bg-emerald-300" : "bg-amber-300")} />{camera.statusLabel}</span></div>
-    <div className="absolute inset-0 flex items-center justify-center"><div className="flex size-14 items-center justify-center rounded-2xl border border-cyan-200/15 bg-slate-950/25 text-cyan-200/70 backdrop-blur-sm"><ImageOff className="size-6" aria-hidden="true" /></div></div>
-    <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3"><div><p className="text-[10px] font-medium text-slate-200">ภาพ snapshot ล่าสุด</p><p className="mt-1 text-[9px] text-slate-500">{camera.latestSnapshot ? formatDateTime(camera.latestSnapshot.capturedAt) : "ยังไม่มีข้อมูลภาพ"}</p></div><span className="rounded-md border border-white/10 bg-slate-950/55 px-2 py-1 text-[9px] text-slate-400">Media connector pending</span></div>
+    {!previewImage && <div className="absolute inset-0 flex items-center justify-center"><div className="flex size-14 items-center justify-center rounded-2xl border border-cyan-200/15 bg-slate-950/25 text-cyan-200/70 backdrop-blur-sm"><ImageOff className="size-6" aria-hidden="true" /></div></div>}
+    <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3"><div><p className="text-[10px] font-medium text-slate-200">ภาพ snapshot ล่าสุด</p><p className="mt-1 text-[9px] text-slate-500">{camera.latestSnapshot ? formatDateTime(camera.latestSnapshot.capturedAt) : "ยังไม่มีข้อมูลภาพ"}</p></div><span className="rounded-md border border-white/10 bg-slate-950/55 px-2 py-1 text-[9px] text-slate-400">{previewImage ? "Preview image" : "Media connector pending"}</span></div>
   </div>;
 }
 

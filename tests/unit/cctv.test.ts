@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDemoCctvDetail, createDemoCctvOverview } from "@/lib/cctv/demo-data";
+import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
 import { cctvUpdateSchema } from "@/lib/validations/cctv";
 
 describe("CCTV phase 3 data", () => {
@@ -18,6 +19,12 @@ describe("CCTV phase 3 data", () => {
     const detail = createDemoCctvDetail("demo-camera-001");
     expect(detail).toMatchObject({ cameraCode: "CCTV-SB-001", aiEvents: [{ eventType: "TRAFFIC_CONGESTION", verification: "VERIFIED" }] });
     expect(detail?.snapshots).toHaveLength(8);
+  });
+
+  it("maps the supplied preview images to the first eight cameras", () => {
+    expect(getCctvPreviewImage("CCTV-SB-001")).toBe("/images/cctv/cam-001.png");
+    expect(getCctvPreviewImage("CAM008")).toBe("/images/cctv/cam-008.png");
+    expect(getCctvPreviewImage("CCTV-SB-009")).toBeNull();
   });
 
   it("only accepts safe camera metadata updates", () => {
