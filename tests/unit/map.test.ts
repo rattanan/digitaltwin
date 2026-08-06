@@ -25,7 +25,10 @@ describe("map foundation data", () => {
       destinationHref: expect.stringMatching(/^\/iot\?device=/),
       metrics: [expect.objectContaining({ label: expect.any(String), value: expect.any(Number) })],
     });
-    expect(snapshot.commandFeatures.find((feature) => feature.kind === "CCTV")?.destinationHref).toMatch(/^\/cctv\?camera=/);
+    expect(snapshot.commandFeatures.find((feature) => feature.kind === "CCTV")).toMatchObject({
+      destinationHref: expect.stringMatching(/^\/cctv\?camera=/),
+      previewImageUrl: expect.stringMatching(/^\/images\/cctv\/cam-00[1-8]\.png$/),
+    });
     expect(snapshot.commandFeatures.find((feature) => feature.kind === "ALERT")?.destinationHref).toMatch(/^\/alerts\?alert=/);
     expect(snapshot.commandFeatures.find((feature) => feature.kind === "INCIDENT")?.destinationHref).toMatch(/^\/incidents\?incident=/);
     expect(snapshot.boundary).toMatchObject({ url: "/data/sing-buri-districts.v1.geojson", version: "v1-2019" });

@@ -399,8 +399,9 @@ function deviceSpecs() {
   ];
 }
 
-async function seedIot(provinceId: string, agencyId: string, districtIds: string[]) {
+async function seedIot(provinceId: string, agencyId: string, districtIds: string[], locationIds: Map<string, string>) {
   const typeIds = new Map<string, string>();
+  const sensorLocationCodes = ["FLOOD_RISK", "PARK", "MARKET", "BUS_STATION", "TEMPLE", "HOSPITAL", "CITY_HALL", "SHELTER"] as const;
   for (const [code, nameTh, nameEn] of deviceTypeSeeds) {
     const type = await prisma.iotDeviceType.upsert({
       where: { code },
@@ -414,9 +415,10 @@ async function seedIot(provinceId: string, agencyId: string, districtIds: string
     const deviceCode = `${spec.prefix}-${String(spec.index + 1).padStart(3, "0")}`;
     const deviceId = stableId(`device:${deviceCode}`);
     const status = deviceIndex >= 36 ? "OFFLINE" : "ONLINE";
+    const locationId = locationIds.get(sensorLocationCodes[deviceIndex % sensorLocationCodes.length]);
     const device = await prisma.iotDevice.upsert({
       where: { id: deviceId },
-      update: { nameTh: `${spec.metricKey} ${spec.index + 1}`, status, battery: deviceIndex % 11 === 0 ? 16 : 82, deletedAt: null },
+      update: { nameTh: `${spec.metricKey} ${spec.index + 1}`, status, battery: deviceIndex % 11 === 0 ? 16 : 82, locationId, deletedAt: null },
       create: {
         id: deviceId,
         publicId: deviceId,
@@ -428,6 +430,7 @@ async function seedIot(provinceId: string, agencyId: string, districtIds: string
         lastHeartbeat: valueAt(DEMO_NOW, status === "OFFLINE" ? 2 : 0.1),
         typeId: typeIds.get(spec.type)!,
         agencyId,
+        locationId,
         provinceId,
         districtId: districtIds[deviceIndex % districtIds.length],
       },
@@ -691,7 +694,7 @@ async function seedDemo() {
   const districtIds = districts.map((district) => district.id);
   const locationIds = await seedLocations(province.id, agencies.get("PROVINCIAL_HALL")!);
   await seedCctv(province.id, agencies.get("POLICE")!, locationIds);
-  await seedIot(province.id, agencies.get("DISASTER_PREVENTION")!, districtIds);
+  await seedIot(province.id, agencies.get("DISASTER_PREVENTION")!, districtIds, locationIds);
   const alertIds = await seedAlerts(province.id, districtIds);
   await seedIncidents(province.id, districtIds, alertIds);
   await seedStatistics(province.id, districtIds);

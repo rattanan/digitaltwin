@@ -1,4 +1,5 @@
 import { DEMO_PROVINCE } from "@/lib/demo-data";
+import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
 import type { CommandMapFeature, MapSnapshot } from "@/lib/map/types";
 
 const districtSeeds = [
@@ -127,14 +128,15 @@ export function createDemoMapSnapshot(includeCameras = false, command: DemoComma
     status: camera.status,
     statusLabel: camera.statusLabel,
     lastUpdatedAt: camera.lastSeenAt,
+    previewImageUrl: getCctvPreviewImage(camera.code),
     summary: "กล้องวงจรปิดสำหรับติดตามสถานการณ์และเหตุการณ์จาก AI",
     metrics: [],
     destinationHref: `/cctv?camera=${camera.id}`,
   })) : [];
   const iotFeatures: CommandMapFeature[] = command.iot ? [
     ["demo-device-001", "WATER-SB-001", "สถานีวัดระดับน้ำ C7.A", 100.365, 14.914, "ระดับน้ำ", 12.4, "เมตร", "WARNING"],
-    ["demo-device-008", "AIR-SB-001", "สถานีตรวจวัดคุณภาพอากาศ", 100.401, 14.892, "PM2.5", 38, "µg/m³", "NORMAL"],
-    ["demo-device-013", "RAIN-SB-001", "สถานีวัดปริมาณฝนพรหมบุรี", 100.439, 14.874, "ฝนสะสม", 42, "มม.", "WARNING"],
+    ["demo-device-015", "AIR-SB-001", "สถานีตรวจวัดคุณภาพอากาศ", 100.401, 14.892, "PM2.5", 38, "µg/m³", "WARNING"],
+    ["demo-device-009", "RAIN-SB-001", "สถานีวัดปริมาณฝนพรหมบุรี", 100.439, 14.874, "ฝนสะสม", 42, "มม.", "WARNING"],
   ].map(([id, code, title, longitude, latitude, label, value, unit, state], index) => ({
     id: String(id), kind: "IOT" as const, code: String(code), coordinates: [Number(longitude), Number(latitude)] as [number, number], districtId: districts[index % districts.length]?.id ?? null, districtName: districts[index % districts.length]?.nameTh ?? DEMO_PROVINCE.nameTh,
     title: String(title), categoryLabel: "อุปกรณ์ IoT", status: state as "NORMAL" | "WARNING", statusLabel: state === "WARNING" ? "เฝ้าระวัง" : "ออนไลน์", lastUpdatedAt: "2026-08-05T13:00:00.000Z",

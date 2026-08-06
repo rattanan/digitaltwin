@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
 import { createDemoMapSnapshot } from "@/lib/map/demo-data";
 import type { CommandMapFeature, CommandMapMetric, MapArea, MapMarker, MapMarkerStatus, MapSnapshot } from "@/lib/map/types";
 import { decimalToNumber } from "@/lib/utils";
@@ -114,7 +115,7 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
       includeCameras
         ? prisma.cctvCamera.findMany({
             where: { provinceId: province.id, deletedAt: null, latitude: { not: null }, longitude: { not: null } },
-            select: { id: true, cameraCode: true, nameTh: true, nameEn: true, status: true, latitude: true, longitude: true, lastHeartbeat: true, district: { select: { id: true, nameTh: true } } },
+            select: { id: true, cameraCode: true, nameTh: true, nameEn: true, status: true, latitude: true, longitude: true, lastImageAt: true, lastHeartbeat: true, district: { select: { id: true, nameTh: true } } },
             orderBy: { cameraCode: "asc" },
           })
         : Promise.resolve([]),
@@ -209,7 +210,7 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
           ...point,
           parentName: camera.district?.nameTh ?? province.nameTh,
           districtId: camera.district?.id ?? null,
-          lastSeenAt: camera.lastHeartbeat?.toISOString() ?? null,
+          lastSeenAt: camera.lastImageAt?.toISOString() ?? camera.lastHeartbeat?.toISOString() ?? null,
         }];
       }));
     }
@@ -226,6 +227,7 @@ export async function getMapSnapshot(options: MapQueryOptions = {}): Promise<Map
       status: marker.status,
       statusLabel: marker.statusLabel,
       lastUpdatedAt: marker.lastSeenAt,
+      previewImageUrl: marker.kind === "CAMERA" ? getCctvPreviewImage(marker.code) : null,
       summary: marker.kind === "CAMERA" ? "กล้องวงจรปิดสำหรับติดตามสถานการณ์และ AI events" : `${marker.categoryLabel}ในพื้นที่จังหวัดสิงห์บุรี`,
       metrics: [],
       destinationHref: marker.kind === "CAMERA" ? `/cctv?camera=${marker.id}` : `/map?feature=marker:${marker.id}`,
