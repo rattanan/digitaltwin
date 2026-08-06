@@ -105,8 +105,8 @@ function createAlertEvidence(alert: AlertItem): { cctvEvidence: AlertCctvEvidenc
   const cctvEvidence = alert.source === "CCTV" || alert.source === "CCTV_AI"
     ? alert.camera ? { camera: alert.camera, imageUrl: getCctvPreviewImage(alert.camera.code), capturedAt: alert.createdAt } : null
     : null;
-  const iotDetail = alert.source === "IOT" && alert.device ? createDemoIotDetail(alert.device.id) : null;
-  const iotEvidence = alert.source === "IOT" && alert.device
+  const iotDetail = alert.device ? createDemoIotDetail(alert.device.id) : null;
+  const iotEvidence = alert.device
     ? { device: alert.device, metrics: iotDetail?.metrics ?? [] }
     : null;
   return { cctvEvidence, iotEvidence };
@@ -118,7 +118,6 @@ function createAlert(index: number): AlertItem {
   const alertSeverity = severity as AlertSeverity;
   const alertStatus = status as AlertStatus;
   const isCctvSource = alertSource === "CCTV" || alertSource === "CCTV_AI";
-  const isIotSource = alertSource === "IOT";
   const createdAt = hoursAgo(index + 1);
   const isFinal = ALERT_FINAL_STATUSES.includes(alertStatus);
   return {
@@ -140,7 +139,7 @@ function createAlert(index: number): AlertItem {
     locationName: index % 5 === 0 ? "สถานีตรวจวัด C7.A" : null,
     district: district(index),
     camera: alertReference(index, "camera", isCctvSource),
-    device: alertReference(index, "device", isIotSource),
+    device: alertReference(index, "device", true),
     linkedIncidentCount: index < incidentSeeds.length ? 1 : index % 6 === 0 ? 1 : 0,
   };
 }

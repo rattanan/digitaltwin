@@ -487,6 +487,15 @@ async function seedAlerts(provinceId: string, districtIds: string[]) {
       ["NEW", "ACKNOWLEDGED", "IN_PROGRESS", "RESOLVED", "DISMISSED"][index % 5],
     ] as const),
   ] as const;
+  const linkedIotDevices = [
+    ["WATER-SB", 1],
+    ["RAIN-SB", 1],
+    ["AIR-SB", 1],
+    ["WASTE-SB", 1],
+    ["TRAFFIC-SB", 1],
+    ["TOURISM-SB", 1],
+    ["HEALTH-SB", 1],
+  ] as const;
   const ids: string[] = [];
   for (const [index, [title, description, source, severity, status]] of alertSeeds.entries()) {
     const id = stableId(`alert:${index}`);
@@ -499,9 +508,9 @@ async function seedAlerts(provinceId: string, districtIds: string[]) {
       5: ["WATER-SB", 2],
       6: ["WASTE-SB", 1],
       7: ["TRAFFIC-SB", 1],
-    } as Record<number, [string, number]>)[index] ?? ["WATER-SB", (index % 8) + 1];
+    } as Record<number, [string, number]>)[index] ?? linkedIotDevices[index % linkedIotDevices.length];
     const cameraId = source === "CCTV" || source === "CCTV_AI" ? stableId(`camera:CCTV-SB-${String(cameraNumber).padStart(3, "0")}`) : null;
-    const deviceId = source === "IOT" ? stableId(`device:${iotDevice[0]}-${String(iotDevice[1]).padStart(3, "0")}`) : null;
+    const deviceId = stableId(`device:${iotDevice[0]}-${String(iotDevice[1]).padStart(3, "0")}`);
     await prisma.alert.upsert({
       where: { id },
       update: { title, description, source, severity, status, provinceId, districtId: districtIds[index % districtIds.length], cameraId, deviceId },
@@ -516,7 +525,7 @@ async function seedAlerts(provinceId: string, districtIds: string[]) {
         provinceId,
         districtId: districtIds[index % districtIds.length],
         cameraId: cameraId ?? undefined,
-        deviceId: deviceId ?? undefined,
+        deviceId,
         createdAt: valueAt(DEMO_NOW, index),
         metadata: serializeJsonText({ seed: true }),
       },

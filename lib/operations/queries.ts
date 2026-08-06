@@ -318,12 +318,10 @@ export async function getAlertDetail(id: string) {
             capturedAt: row.camera.snapshots[0]?.capturedAt.toISOString() ?? row.camera.lastImageAt?.toISOString() ?? null,
           } : null
         : null,
-      iotEvidence: source === "IOT"
-        ? row.device ? {
-            device: referenceFromDevice(row.device)!,
-            metrics: serializeAlertIotMetrics(row.device, severity),
-          } : null
-        : null,
+      iotEvidence: row.device ? {
+        device: referenceFromDevice(row.device)!,
+        metrics: serializeAlertIotMetrics(row.device, severity),
+      } : null,
       linkedIncidentCount: row.incidents.length,
       history: row.histories.map((item) => ({ id: item.id.toString(), state: item.action, stateLabel: item.action === "CREATED" ? "สร้างรายการ" : ALERT_STATUS_LABELS[normalizeAlertStatus(item.action)], note: item.note, actorName: null, createdAt: item.createdAt.toISOString() })),
       incidents: row.incidents.map((item) => {

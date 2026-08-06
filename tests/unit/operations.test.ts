@@ -32,6 +32,10 @@ describe("Phase 5 operations data", () => {
         camera: { code: "CCTV-SB-004" },
         imageUrl: "/images/cctv/cam-004.png",
       },
+      iotEvidence: {
+        device: { code: "WATER-SB-002" },
+        metrics: [{ metricKey: "waterLevel", latestValue: 11.91 }],
+      },
     });
 
     const iot = createDemoAlertDetail("demo-alert-001");
@@ -42,6 +46,12 @@ describe("Phase 5 operations data", () => {
         metrics: [{ metricKey: "waterLevel", latestValue: 12.45 }],
       },
     });
+  });
+
+  it("links IoT telemetry to every seeded alert", () => {
+    const alerts = createDemoAlertOverview({ limit: 100 });
+    const details = alerts.items.map((alert) => createDemoAlertDetail(alert.id));
+    expect(details.every((detail) => detail?.device && detail.iotEvidence && detail.iotEvidence.metrics.length > 0)).toBe(true);
   });
 
   it("exposes final status sets for workflow summaries", () => {
