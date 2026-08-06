@@ -59,6 +59,7 @@ export type CommandMapFeature = {
   id: string;
   kind: CommandMapKind;
   code: string;
+  previewImageUrl?: string | null;
   coordinates: [number, number];
   districtId: string | null;
   districtName: string | null;
