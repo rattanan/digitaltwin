@@ -8,6 +8,7 @@ import { Activity, BellRing, Camera, ChevronRight, CircleAlert, CloudRain, Dropl
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { pointInBoundaryGeometry } from "@/lib/map/geometry";
 import { createSpiderfyPoints } from "@/lib/map/spiderfy";
 import { cn, formatDateTime, formatNumber } from "@/lib/utils";
 import type { CommandMapFeature, CommandMapKind, MapMarkerStatus, MapSnapshot } from "@/lib/map/types";
@@ -166,7 +167,7 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedDistrict, setSelectedDistrict] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<{ id: string; code: string; name: string; geometry: BoundaryFeature["geometry"] } | null>(null);
   const [hoveredDistrict, setHoveredDistrict] = useState("");
   const [projectedDistricts, setProjectedDistricts] = useState<ProjectedDistrict[]>([]);
   const [projectedMarkers, setProjectedMarkers] = useState<ProjectedMarker[]>([]);
@@ -174,7 +175,7 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
 
   const availableKinds = useMemo(() => (Object.keys(kindMeta) as CommandMapKind[]).filter((kind) => snapshot.commandFeatures.some((feature) => feature.kind === kind)), [snapshot.commandFeatures]);
   const filteredFeatures = useMemo(() => snapshot.commandFeatures
-    .filter((feature) => activeKinds[feature.kind] && (!selectedDistrict || feature.districtId === selectedDistrict.id))
+    .filter((feature) => activeKinds[feature.kind] && (!selectedDistrict || pointInBoundaryGeometry(feature.coordinates, selectedDistrict.geometry)))
     .sort((left, right) => featurePriority(left) - featurePriority(right)), [activeKinds, selectedDistrict, snapshot.commandFeatures]);
   const selectedFeature = snapshot.commandFeatures.find((feature) => feature.id === selectedId) ?? null;
   const priorityFeatures = filteredFeatures.slice(0, 5);
@@ -202,7 +203,7 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
     const boundaryFeature = boundaryRef.current?.features.find((feature) => feature.properties.code === code);
     const district = snapshotRef.current.areas.find((area) => area.level === "DISTRICT" && area.code === code);
     if (!boundaryFeature || !district) return;
-    setSelectedDistrict({ id: district.id, code, name: boundaryFeature.properties.nameTh });
+    setSelectedDistrict({ id: district.id, code, name: boundaryFeature.properties.nameTh, geometry: boundaryFeature.geometry });
     setSelectedId(null);
     const bounds = geometryBounds(boundaryFeature.geometry);
     if (bounds) mapRef.current?.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 72, maxZoom: 12.5, duration: 500 });
@@ -401,6 +402,7 @@ export function CommandMap({ initialSnapshot }: { initialSnapshot: MapSnapshot }
         <label className="mt-2 block border-t border-white/[.07] pt-2"><span className="sr-only">เลือกอำเภอบนแผนที่</span><select value={selectedDistrict?.code ?? "ALL"} onChange={(event) => event.target.value === "ALL" ? fitProvince() : selectBoundary(event.target.value)} className="min-h-11 w-full cursor-pointer rounded-xl border border-white/10 bg-slate-950/70 px-3 text-xs text-slate-200 outline-none focus:ring-2 focus:ring-cyan-200"><option value="ALL">ทั้งจังหวัดสิงห์บุรี</option>{snapshot.areas.filter((area) => area.level === "DISTRICT").map((area) => <option key={area.id} value={area.code}>{area.nameTh}</option>)}</select></label>
       </div>
       {(hoveredDistrict || selectedDistrict) && <div className="absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-xl border border-cyan-200/15 bg-[#071522]/90 px-4 py-2 text-center shadow-xl backdrop-blur-xl"><p className="text-[10px] text-slate-500">{selectedDistrict ? "กำลังดูพื้นที่" : "คลิกเพื่อเจาะพื้นที่"}</p><p className="mt-0.5 text-sm font-medium text-cyan-50">{selectedDistrict?.name ?? hoveredDistrict}</p></div>}
+      {selectedDistrict && filteredFeatures.length === 0 && !loading && !mapFailed && <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 w-[min(90%,320px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-[#071522]/92 px-5 py-4 text-center shadow-2xl backdrop-blur-xl"><MapPin className="mx-auto size-5 text-slate-500" /><p className="mt-2 text-sm font-medium text-slate-200">ยังไม่มีจุดข้อมูลในอำเภอ{selectedDistrict.name}</p><p className="mt-1 text-xs leading-5 text-slate-500">ลองเปิดชั้นข้อมูลอื่น หรือกลับไปดูทั้งจังหวัด</p></div>}
       <div className="absolute bottom-4 left-4 z-20 hidden w-64 rounded-2xl border border-white/10 bg-[#071522]/88 p-3 shadow-xl backdrop-blur-xl lg:block"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-400">จุดที่ควรติดตาม</p>{refreshing && <RefreshCw className="size-3 animate-spin text-cyan-200" />}</div><div className="space-y-1.5">{priorityFeatures.map((feature) => <button key={`${feature.kind}:${feature.id}`} type="button" onClick={() => selectFeature(feature.id)} className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-white/[.06] bg-white/[.025] px-2.5 text-left transition hover:border-cyan-200/20 hover:bg-cyan-200/[.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"><FeatureIcon feature={feature} className="size-3.5 shrink-0 text-cyan-200" /><span className="min-w-0 flex-1 truncate text-[10px] text-slate-200">{feature.title}</span><span className={cn("size-2 rounded-full", feature.status === "CRITICAL" || feature.status === "OFFLINE" ? "bg-rose-300" : feature.status === "WARNING" ? "bg-amber-300" : "bg-emerald-300")} /></button>)}</div></div>
       <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex flex-wrap gap-x-3 gap-y-1 rounded-xl border border-white/10 bg-[#071522]/82 px-3 py-2 text-[9px] text-slate-300 backdrop-blur sm:bottom-4 sm:left-1/2 sm:-translate-x-1/2"><span className="flex items-center gap-1.5"><i className="size-2 rounded-full bg-emerald-300" />ปกติ</span><span className="flex items-center gap-1.5"><i className="size-2 rounded-full bg-amber-300" />เฝ้าระวัง</span><span className="flex items-center gap-1.5"><i className="size-2 rounded-full bg-rose-300" />วิกฤต / Offline</span></div>
       {selectedFeature && <DetailPanel feature={selectedFeature} onClose={() => setSelectedId(null)} />}

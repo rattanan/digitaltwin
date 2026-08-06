@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDemoMapSnapshot } from "@/lib/map/demo-data";
+import { pointInBoundaryGeometry } from "@/lib/map/geometry";
 import { createSpiderfyPoints } from "@/lib/map/spiderfy";
 
 describe("map foundation data", () => {
@@ -52,5 +53,32 @@ describe("map foundation data", () => {
   it("keeps spiderfied markers inside the viewport near an edge", () => {
     const points = createSpiderfyPoints({ count: 8, anchorX: 4, anchorY: 4, viewportWidth: 360, viewportHeight: 560 });
     expect(points.every((point) => point.x >= 52 && point.x <= 308 && point.y >= 52 && point.y <= 508)).toBe(true);
+  });
+
+  it("selects markers by their actual coordinates inside a district boundary", () => {
+    const geometry = {
+      type: "Polygon" as const,
+      coordinates: [[[100, 14], [101, 14], [101, 15], [100, 15], [100, 14]]],
+    };
+
+    expect(pointInBoundaryGeometry([100.5, 14.5], geometry)).toBe(true);
+    expect(pointInBoundaryGeometry([101.5, 14.5], geometry)).toBe(false);
+  });
+
+  it("supports district multipolygons and excludes polygon holes", () => {
+    const geometry = {
+      type: "MultiPolygon" as const,
+      coordinates: [
+        [
+          [[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]],
+          [[1, 1], [2, 1], [2, 2], [1, 2], [1, 1]],
+        ],
+        [[[10, 10], [12, 10], [12, 12], [10, 12], [10, 10]]],
+      ],
+    };
+
+    expect(pointInBoundaryGeometry([3, 3], geometry)).toBe(true);
+    expect(pointInBoundaryGeometry([1.5, 1.5], geometry)).toBe(false);
+    expect(pointInBoundaryGeometry([11, 11], geometry)).toBe(true);
   });
 });
