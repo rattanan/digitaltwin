@@ -66,6 +66,30 @@ export type OperationDistrictOption = { id: string; code: string; nameTh: string
 export type OperationReference = { id: string; code: string; nameTh: string };
 export type OperationHistory = { id: string; state: string; stateLabel: string; note: string | null; actorName: string | null; createdAt: string };
 
+export type AlertCctvEvidence = {
+  camera: OperationReference;
+  imageUrl: string | null;
+  capturedAt: string | null;
+};
+
+export type AlertIotMetricEvidence = {
+  id: string;
+  metricKey: string;
+  nameTh: string;
+  unit: string | null;
+  warning: number | null;
+  critical: number | null;
+  latestValue: number | null;
+  latestRecordedAt: string | null;
+  state: "NORMAL" | "WARNING" | "CRITICAL" | "NO_DATA";
+  stateLabel: string;
+};
+
+export type AlertIotEvidence = {
+  device: OperationReference;
+  metrics: AlertIotMetricEvidence[];
+};
+
 export type AlertItem = {
   id: string;
   publicId: string;
@@ -90,6 +114,8 @@ export type AlertItem = {
 };
 
 export type AlertDetail = AlertItem & {
+  cctvEvidence: AlertCctvEvidence | null;
+  iotEvidence: AlertIotEvidence | null;
   history: OperationHistory[];
   incidents: { id: string; incidentNo: string; title: string; status: IncidentStatus; statusLabel: string; severity: AlertSeverity; severityLabel: string }[];
 };

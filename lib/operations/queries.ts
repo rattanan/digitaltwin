@@ -1,6 +1,8 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
 import { createDemoAlertDetail, createDemoAlertOverview, createDemoIncidentDetail, createDemoIncidentOverview } from "@/lib/operations/demo-data";
+import { IOT_METRIC_STATE_LABELS, type IotMetricState } from "@/lib/iot/types";
 import {
   ALERT_FINAL_STATUSES,
   ALERT_SEVERITY_LABELS,
@@ -14,6 +16,7 @@ import {
   isAlertStatus,
   isIncidentCategory,
   isIncidentStatus,
+  type AlertIotMetricEvidence,
   type AlertOverview,
   type AlertSeverity,
   type AlertSource,
@@ -23,6 +26,7 @@ import {
   type IncidentStatus,
   type OperationReference,
 } from "@/lib/operations/types";
+import { decimalToNumber } from "@/lib/utils";
 
 export type AlertListOptions = {
   page?: number;
@@ -77,6 +81,44 @@ function referenceFromCamera(item: { id: string; cameraCode: string; nameTh: str
 
 function referenceFromDevice(item: { id: string; deviceCode: string; nameTh: string } | null) {
   return item ? { id: item.id, code: item.deviceCode, nameTh: item.nameTh } : null;
+}
+
+function metricState(value: number | null, warning: number | null, critical: number | null, severity: AlertSeverity): IotMetricState {
+  if (value === null) return "NO_DATA";
+  if (critical !== null && value >= critical) return "CRITICAL";
+  if (warning !== null && value >= warning) return "WARNING";
+  if (severity === "CRITICAL" || severity === "HIGH") return "CRITICAL";
+  if (severity === "WARNING") return "WARNING";
+  return "NORMAL";
+}
+
+function serializeAlertIotMetrics(
+  device: {
+    metrics: { id: string; metricKey: string; nameTh: string; unit: string | null; warning: unknown; critical: unknown }[];
+    latestValues: { metricKey: string; value: unknown; unit: string | null; recordedAt: Date }[];
+  },
+  severity: AlertSeverity,
+): AlertIotMetricEvidence[] {
+  const latestByMetric = new Map(device.latestValues.map((latest) => [latest.metricKey, latest]));
+  return device.metrics.map((metric) => {
+    const latest = latestByMetric.get(metric.metricKey);
+    const latestValue = latest ? decimalToNumber(latest.value) : null;
+    const warning = metric.warning === null ? null : decimalToNumber(metric.warning);
+    const critical = metric.critical === null ? null : decimalToNumber(metric.critical);
+    const state = metricState(latestValue, warning, critical, severity);
+    return {
+      id: metric.id,
+      metricKey: metric.metricKey,
+      nameTh: metric.nameTh,
+      unit: latest?.unit ?? metric.unit,
+      warning,
+      critical,
+      latestValue,
+      latestRecordedAt: latest?.recordedAt.toISOString() ?? null,
+      state,
+      stateLabel: IOT_METRIC_STATE_LABELS[state],
+    };
+  });
 }
 
 function buildAlertWhere(provinceId: string, options: AlertListOptions): Prisma.AlertWhereInput {
@@ -216,8 +258,24 @@ async function findAlertDetailRow(id: string, provinceId: string) {
       agency: { select: { nameTh: true } },
       location: { select: { nameTh: true } },
       district: { select: { id: true, nameTh: true } },
-      camera: { select: { id: true, cameraCode: true, nameTh: true } },
-      device: { select: { id: true, deviceCode: true, nameTh: true } },
+      camera: {
+        select: {
+          id: true,
+          cameraCode: true,
+          nameTh: true,
+          lastImageAt: true,
+          snapshots: { orderBy: { capturedAt: "desc" }, take: 1, select: { capturedAt: true } },
+        },
+      },
+      device: {
+        select: {
+          id: true,
+          deviceCode: true,
+          nameTh: true,
+          metrics: { select: { id: true, metricKey: true, nameTh: true, unit: true, warning: true, critical: true }, orderBy: { metricKey: "asc" } },
+          latestValues: { select: { metricKey: true, value: true, unit: true, recordedAt: true } },
+        },
+      },
       histories: { orderBy: { createdAt: "asc" }, select: { id: true, action: true, note: true, actorId: true, createdAt: true } },
       incidents: { orderBy: { createdAt: "desc" }, select: { id: true, incidentNo: true, title: true, status: true, severity: true } },
     },
@@ -253,6 +311,19 @@ export async function getAlertDetail(id: string) {
       district: row.district,
       camera: referenceFromCamera(row.camera),
       device: referenceFromDevice(row.device),
+      cctvEvidence: source === "CCTV" || source === "CCTV_AI"
+        ? row.camera ? {
+            camera: referenceFromCamera(row.camera)!,
+            imageUrl: getCctvPreviewImage(row.camera.cameraCode),
+            capturedAt: row.camera.snapshots[0]?.capturedAt.toISOString() ?? row.camera.lastImageAt?.toISOString() ?? null,
+          } : null
+        : null,
+      iotEvidence: source === "IOT"
+        ? row.device ? {
+            device: referenceFromDevice(row.device)!,
+            metrics: serializeAlertIotMetrics(row.device, severity),
+          } : null
+        : null,
       linkedIncidentCount: row.incidents.length,
       history: row.histories.map((item) => ({ id: item.id.toString(), state: item.action, stateLabel: item.action === "CREATED" ? "สร้างรายการ" : ALERT_STATUS_LABELS[normalizeAlertStatus(item.action)], note: item.note, actorName: null, createdAt: item.createdAt.toISOString() })),
       incidents: row.incidents.map((item) => {
