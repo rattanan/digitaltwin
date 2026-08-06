@@ -88,7 +88,7 @@ function metricState(value: number | null, warning: number | null, critical: num
   if (critical !== null && value >= critical) return "CRITICAL";
   if (warning !== null && value >= warning) return "WARNING";
   if (severity === "CRITICAL" || severity === "HIGH") return "CRITICAL";
-  if (severity === "WARNING") return "WARNING";
+  if (severity === "WARNING" || severity === "LOW") return "WARNING";
   return "NORMAL";
 }
 

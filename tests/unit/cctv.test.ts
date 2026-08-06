@@ -24,7 +24,9 @@ describe("CCTV phase 3 data", () => {
   it("maps the supplied preview images to the first eight cameras", () => {
     expect(getCctvPreviewImage("CCTV-SB-001")).toBe("/images/cctv/cam-001.png");
     expect(getCctvPreviewImage("CAM008")).toBe("/images/cctv/cam-008.png");
-    expect(getCctvPreviewImage("CCTV-SB-009")).toBeNull();
+    expect(getCctvPreviewImage("CCTV-SB-009")).toMatch(/^\/images\/cctv\/cam-00[1-8]\.png$/);
+    expect(getCctvPreviewImage("CCTV-SB-020")).toMatch(/^\/images\/cctv\/cam-00[1-8]\.png$/);
+    expect(getCctvPreviewImage("CCTV-SB-009")).toBe(getCctvPreviewImage("CCTV-SB-009"));
   });
 
   it("only accepts safe camera metadata updates", () => {

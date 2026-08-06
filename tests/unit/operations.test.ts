@@ -24,6 +24,26 @@ describe("Phase 5 operations data", () => {
     expect(createDemoIncidentDetail("demo-incident-001")?.history).toHaveLength(2);
   });
 
+  it("attaches source-specific evidence to alert details", () => {
+    const cctv = createDemoAlertDetail("demo-alert-002");
+    expect(cctv).toMatchObject({
+      source: "CCTV",
+      cctvEvidence: {
+        camera: { code: "CCTV-SB-004" },
+        imageUrl: "/images/cctv/cam-004.png",
+      },
+    });
+
+    const iot = createDemoAlertDetail("demo-alert-001");
+    expect(iot).toMatchObject({
+      source: "IOT",
+      iotEvidence: {
+        device: { code: "WATER-SB-001" },
+        metrics: [{ metricKey: "waterLevel", latestValue: 12.45 }],
+      },
+    });
+  });
+
   it("exposes final status sets for workflow summaries", () => {
     expect(ALERT_FINAL_STATUSES).toEqual(["RESOLVED", "DISMISSED"]);
     expect(INCIDENT_FINAL_STATUSES).toEqual(["RESOLVED", "CLOSED"]);

@@ -1,4 +1,6 @@
 import { DEMO_PROVINCE } from "@/lib/demo-data";
+import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
+import { createDemoIotDetail } from "@/lib/iot/demo-data";
 import {
   ALERT_FINAL_STATUSES,
   ALERT_SEVERITY_LABELS,
@@ -8,7 +10,9 @@ import {
   INCIDENT_FINAL_STATUSES,
   INCIDENT_STATUS_LABELS,
   type AlertDetail,
+  type AlertCctvEvidence,
   type AlertItem,
+  type AlertIotEvidence,
   type AlertOverview,
   type AlertSeverity,
   type AlertSource,
@@ -74,16 +78,38 @@ function district(index: number) {
   return { id, nameTh };
 }
 
-function alertReference(index: number, kind: "camera" | "device") {
-  if (kind === "camera" && index % 4 === 0) {
-    const number = String((index % 20) + 1).padStart(3, "0");
+function alertReference(index: number, kind: "camera" | "device", force = false) {
+  if (kind === "camera" && (force || index % 4 === 0)) {
+    const number = String(({ 1: 4, 3: 5 } as Record<number, number>)[index] ?? (index % 20) + 1).padStart(3, "0");
     return { id: `demo-camera-${number}`, code: `CCTV-SB-${number}`, nameTh: `จุด CCTV ${number}` };
   }
-  if (kind === "device" && index % 3 === 0) {
-    const number = String((index % 8) + 1).padStart(3, "0");
-    return { id: `demo-device-${number}`, code: `WATER-SB-${number}`, nameTh: `อุปกรณ์ตรวจวัด ${number}` };
+  if (kind === "device" && (force || index % 3 === 0)) {
+    const device = ({
+      0: [1, "WATER-SB", 1, "ระดับน้ำ จุดที่ 1"],
+      2: [15, "AIR-SB", 1, "คุณภาพอากาศ จุดที่ 1"],
+      4: [9, "RAIN-SB", 1, "ปริมาณฝน จุดที่ 1"],
+      5: [2, "WATER-SB", 2, "ระดับน้ำ จุดที่ 2"],
+      6: [21, "WASTE-SB", 1, "การจัดเก็บขยะ จุดที่ 1"],
+      7: [27, "TRAFFIC-SB", 1, "การจราจร จุดที่ 1"],
+    } as Record<number, [number, string, number, string]>)[index];
+    const number = String(device?.[0] ?? (index % 8) + 1).padStart(3, "0");
+    const prefix = device?.[1] ?? "WATER-SB";
+    const codeNumber = String(device?.[2] ?? (index % 8) + 1).padStart(3, "0");
+    const name = device?.[3] ?? `อุปกรณ์ตรวจวัด ${codeNumber}`;
+    return { id: `demo-device-${number}`, code: `${prefix}-${codeNumber}`, nameTh: name };
   }
   return null;
+}
+
+function createAlertEvidence(alert: AlertItem): { cctvEvidence: AlertCctvEvidence | null; iotEvidence: AlertIotEvidence | null } {
+  const cctvEvidence = alert.source === "CCTV" || alert.source === "CCTV_AI"
+    ? alert.camera ? { camera: alert.camera, imageUrl: getCctvPreviewImage(alert.camera.code), capturedAt: alert.createdAt } : null
+    : null;
+  const iotDetail = alert.source === "IOT" && alert.device ? createDemoIotDetail(alert.device.id) : null;
+  const iotEvidence = alert.source === "IOT" && alert.device
+    ? { device: alert.device, metrics: iotDetail?.metrics ?? [] }
+    : null;
+  return { cctvEvidence, iotEvidence };
 }
 
 function createAlert(index: number): AlertItem {
@@ -91,6 +117,8 @@ function createAlert(index: number): AlertItem {
   const alertSource = source as AlertSource;
   const alertSeverity = severity as AlertSeverity;
   const alertStatus = status as AlertStatus;
+  const isCctvSource = alertSource === "CCTV" || alertSource === "CCTV_AI";
+  const isIotSource = alertSource === "IOT";
   const createdAt = hoursAgo(index + 1);
   const isFinal = ALERT_FINAL_STATUSES.includes(alertStatus);
   return {
@@ -111,8 +139,8 @@ function createAlert(index: number): AlertItem {
     agencyName: index % 3 === 0 ? "สำนักงานป้องกันและบรรเทาสาธารณภัย" : "ศูนย์บัญชาการจังหวัด",
     locationName: index % 5 === 0 ? "สถานีตรวจวัด C7.A" : null,
     district: district(index),
-    camera: alertReference(index, "camera"),
-    device: alertReference(index, "device"),
+    camera: alertReference(index, "camera", isCctvSource),
+    device: alertReference(index, "device", isIotSource),
     linkedIncidentCount: index < incidentSeeds.length ? 1 : index % 6 === 0 ? 1 : 0,
   };
 }
@@ -211,8 +239,10 @@ export function createDemoAlertOverview(options: { page?: number; limit?: number
 export function createDemoAlertDetail(id: string): AlertDetail | null {
   const alert = allDemoAlerts.find((item) => item.id === id || item.publicId === id);
   if (!alert) return null;
+  const evidence = createAlertEvidence(alert);
   return {
     ...alert,
+    ...evidence,
     history: alertHistory(alert),
     incidents: allDemoIncidents.filter((incident) => incident.alert?.id === alert.id).map((incident) => ({ id: incident.id, incidentNo: incident.incidentNo, title: incident.title, status: incident.status, statusLabel: incident.statusLabel, severity: incident.severity, severityLabel: incident.severityLabel })),
   };
