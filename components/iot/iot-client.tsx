@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn, formatDateTime, formatNumber } from "@/lib/utils";
 import { ListPagination } from "@/components/common/list-pagination";
+import { retainSelectedId, sameStringFilters } from "@/lib/client/list-detail-state";
 import { IOT_METRIC_STATE_LABELS, IOT_STATUSES, IOT_STATUS_LABELS, type IotDetail, type IotMetricState, type IotOverview, type IotStatus } from "@/lib/iot/types";
 
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string };
@@ -116,7 +117,7 @@ export function IotClient({ initialData, canManage, initialSelectedId = null }: 
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const firstFilterRender = useRef(true);
+  const appliedFiltersRef = useRef<readonly string[]>([search, statusFilter, typeFilter, districtFilter]);
 
   const loadPage = useCallback(async (nextPage: number) => {
     setLoading(true);
@@ -138,8 +139,7 @@ export function IotClient({ initialData, canManage, initialSelectedId = null }: 
           continue;
         }
         setData({ ...next, pagination });
-        setDetail(null);
-        setSelectedId(next.items[0]?.id ?? null);
+        setSelectedId((current) => retainSelectedId(current, next.items.map((device) => device.id)));
         break;
       }
     } catch (loadError) {
@@ -150,13 +150,12 @@ export function IotClient({ initialData, canManage, initialSelectedId = null }: 
   }, [districtFilter, search, statusFilter, typeFilter]);
 
   useEffect(() => {
-    if (firstFilterRender.current) {
-      firstFilterRender.current = false;
-      return;
-    }
+    const nextFilters = [search, statusFilter, typeFilter, districtFilter];
+    if (sameStringFilters(appliedFiltersRef.current, nextFilters)) return;
+    appliedFiltersRef.current = nextFilters;
     const timer = window.setTimeout(() => { void loadPage(1); }, 300);
     return () => window.clearTimeout(timer);
-  }, [loadPage]);
+  }, [districtFilter, loadPage, search, statusFilter, typeFilter]);
 
   async function refresh() {
     await loadPage(data.pagination.page);
