@@ -77,6 +77,7 @@ function cameraSeed(index: number) {
     locationName: index === 0 ? "ศาลากลางจังหวัดสิงห์บุรี" : index === 2 ? "โรงพยาบาลสิงห์บุรี" : null,
     district: { id: district[0], nameTh: district[2] },
     subdistrictName: null,
+    googleDriveFolderUrl: null,
     latestSnapshot,
     snapshotCount: 24,
     aiEventCount: index < 6 ? 1 : 0,

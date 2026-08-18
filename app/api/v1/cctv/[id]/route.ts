@@ -4,13 +4,14 @@ import { prisma } from "@/lib/db/prisma";
 import { writeAuditLog } from "@/lib/audit/logger";
 import { cctvUpdateSchema } from "@/lib/validations/cctv";
 import { getCctvDetail } from "@/lib/cctv/queries";
+import { isGoogleDriveFolderUrl } from "@/lib/cctv/google-drive";
 
 type CctvContext = { params: Promise<{ id: string }> };
 
 async function findCamera(id: string) {
   return prisma.cctvCamera.findFirst({
     where: { deletedAt: null, OR: [{ id }, { publicId: id }] },
-    select: { id: true, publicId: true, cameraCode: true, nameTh: true, nameEn: true, status: true, latitude: true, longitude: true },
+    select: { id: true, publicId: true, cameraCode: true, nameTh: true, nameEn: true, status: true, latitude: true, longitude: true, nfsFolderPath: true },
   });
 }
 
@@ -46,6 +47,11 @@ export async function PATCH(request: Request, context: CctvContext) {
         ...(input.latitude !== undefined ? { latitude: input.latitude } : {}),
         ...(input.longitude !== undefined ? { longitude: input.longitude } : {}),
         ...(input.districtId !== undefined ? { districtId: district?.id ?? null, ...(district ? { provinceId: district.provinceId } : {}) } : {}),
+        ...(input.googleDriveFolderUrl
+          ? { nfsFolderPath: input.googleDriveFolderUrl }
+          : input.googleDriveFolderUrl === "" && isGoogleDriveFolderUrl(existing.nfsFolderPath)
+            ? { nfsFolderPath: null }
+            : {}),
       },
     });
     await writeAuditLog({

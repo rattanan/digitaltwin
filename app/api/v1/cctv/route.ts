@@ -52,6 +52,7 @@ export async function POST(request: Request) {
         longitude: input.longitude ?? null,
         provinceId,
         districtId: district?.id ?? null,
+        nfsFolderPath: input.googleDriveFolderUrl || null,
       },
     });
     await writeAuditLog({ actorId: auth.user.id, action: "CREATE", module: "cctv", entityType: "camera", entityId: camera.id, afterData: { cameraCode: camera.cameraCode, nameTh: camera.nameTh, status: camera.status } });

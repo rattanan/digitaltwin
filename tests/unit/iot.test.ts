@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDemoIotDetail, createDemoIotOverview } from "@/lib/iot/demo-data";
+import { isValidIotIngestApiKey } from "@/lib/iot/api-key";
 import { iotCreateSchema, iotReadingSchema, iotUpdateSchema } from "@/lib/validations/iot";
 
 describe("IoT phase 4 data", () => {
@@ -28,5 +29,10 @@ describe("IoT phase 4 data", () => {
     expect(iotUpdateSchema.safeParse({ battery: 101 }).success).toBe(false);
     expect(iotReadingSchema.parse({ deviceId: "WATER-SB-001", metricKey: "waterLevel", value: 12.5, idempotencyKey: "reading-1" })).toMatchObject({ value: 12.5 });
     expect(iotReadingSchema.safeParse({ deviceId: "WATER-SB-001", metricKey: "waterLevel", value: Number.NaN }).success).toBe(false);
+  });
+
+  it("compares IoT ingestion API keys without exposing the raw key", () => {
+    expect(isValidIotIngestApiKey("device-secret", "device-secret")).toBe(true);
+    expect(isValidIotIngestApiKey("wrong-secret", "device-secret")).toBe(false);
   });
 });

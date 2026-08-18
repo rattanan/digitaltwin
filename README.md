@@ -143,6 +143,24 @@ tests                      unit tests for foundation contracts
 
 เปิดใช้งานที่ `/iot` สำหรับผู้ใช้ที่มี `iot.read` หน้าศูนย์ติดตามแสดงชนิดอุปกรณ์ สถานะ online/offline แบตเตอรี่ ค่า metric ล่าสุด threshold และกราฟ readings รายอุปกรณ์ ผู้ใช้ที่มี `iot.manage` สามารถปรับสถานะ/soft-delete และส่ง telemetry ผ่าน `POST /api/v1/iot/readings` ซึ่งรองรับ `idempotencyKey` เพื่อป้องกันการบันทึกซ้ำ
 
+อุปกรณ์ IoT เรียก endpoint เดียวกันได้โดยตั้ง `IOT_INGEST_API_KEY` เป็นค่าสุ่มยาวอย่างน้อย 32 ตัวอักษร แล้วส่ง header `Authorization: Bearer <API_KEY>` พร้อม JSON ต่อไปนี้ (ใช้ `deviceCode`, public ID หรือ internal ID ใน `deviceId` ได้):
+
+```bash
+curl -X POST http://localhost:3000/api/v1/iot/readings \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_IOT_INGEST_API_KEY' \
+  -d '{
+    "deviceId": "WATER-SB-001",
+    "metricKey": "waterLevel",
+    "value": 12.5,
+    "unit": "cm",
+    "recordedAt": "2026-08-18T10:30:00+07:00",
+    "idempotencyKey": "WATER-SB-001-20260818T103000-waterLevel"
+  }'
+```
+
+`deviceId`, `metricKey` และ `value` เป็นค่าบังคับ ส่วน `unit`, `recordedAt` และ `idempotencyKey` เป็นตัวเลือก หากไม่ส่ง `recordedAt` ระบบใช้เวลาที่รับข้อมูล และหากส่ง `idempotencyKey` เดิมซ้ำ ระบบจะคืนรายการเดิมพร้อม `duplicate: true` โดยไม่บันทึกซ้ำ คีย์นี้ต้องไม่ซ้ำกันทั้งระบบ
+
 ## Phase 5 Alerts และ Incidents
 
 เปิดใช้งานที่ `/alerts` และ `/incidents` สำหรับผู้ใช้ที่มี `alerts.read` หรือ `incidents.read` ตามลำดับ ศูนย์แจ้งเตือนรวมรายการจาก IoT, CCTV, AI และ rule source พร้อม filter ตามสถานะ ระดับความรุนแรง แหล่งที่มา และอำเภอ ส่วน Incident workflow รองรับการเปิดเหตุการณ์ใหม่จากศูนย์ปฏิบัติการ เชื่อม alert/CCTV/IoT และติดตาม due date กับ status history

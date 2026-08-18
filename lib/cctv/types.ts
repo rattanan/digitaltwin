@@ -57,6 +57,7 @@ export type CctvCameraSummary = {
   locationName: string | null;
   district: { id: string; nameTh: string } | null;
   subdistrictName: string | null;
+  googleDriveFolderUrl: string | null;
   latestSnapshot: CctvSnapshotSummary | null;
   snapshotCount: number;
   aiEventCount: number;

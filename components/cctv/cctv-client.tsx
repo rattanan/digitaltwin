@@ -18,7 +18,8 @@ import { retainSelectedId, sameStringFilters } from "@/lib/client/list-detail-st
 
 type ApiPayload<T> = { success?: boolean; data?: T; message?: string };
 type CctvListResponse = Omit<CctvOverview, "pagination"> & { pagination?: CctvOverview["pagination"] };
-type CctvFormValue = { cameraCode: string; nameTh: string; nameEn: string; status: CctvStatus; latitude: string; longitude: string; districtId: string };
+type CctvFormValue = { cameraCode: string; nameTh: string; nameEn: string; status: CctvStatus; latitude: string; longitude: string; districtId: string; googleDriveFolderUrl: string };
+type LatestDriveSnapshot = { imageUrl: string; capturedAt: string; fileName: string; fileSizeBytes: number | null };
 
 const CCTV_PAGE_SIZE = 12;
 
@@ -50,13 +51,44 @@ function CameraStatus({ status }: { status: CctvStatus }) {
 }
 
 function SnapshotPreview({ camera, large = false }: { camera: CctvOverview["items"][number]; large?: boolean }) {
-  const previewImage = getCctvPreviewImage(camera.cameraCode);
+  const [driveSnapshot, setDriveSnapshot] = useState<LatestDriveSnapshot | null>(null);
+  const [driveError, setDriveError] = useState("");
+  const previewImage = camera.googleDriveFolderUrl ? driveSnapshot?.imageUrl : getCctvPreviewImage(camera.cameraCode);
+
+  useEffect(() => {
+    if (!camera.googleDriveFolderUrl) return;
+    let active = true;
+    let loading = false;
+    const controller = new AbortController();
+
+    async function poll() {
+      if (loading || document.visibilityState === "hidden") return;
+      loading = true;
+      try {
+        const snapshot = await api<LatestDriveSnapshot | null>(`/api/v1/cctv/${camera.id}/latest-snapshot`, { cache: "no-store", signal: controller.signal });
+        if (active) {
+          setDriveSnapshot(snapshot);
+          setDriveError(snapshot ? "" : "ยังไม่พบภาพในโฟลเดอร์ ปี/เดือน/วัน");
+        }
+      } catch (pollError) {
+        if (active && !(pollError instanceof DOMException && pollError.name === "AbortError")) {
+          setDriveError(pollError instanceof Error ? pollError.message : "โหลดภาพจาก Google Drive ไม่สำเร็จ");
+        }
+      } finally {
+        loading = false;
+      }
+    }
+
+    void poll();
+    const timer = window.setInterval(() => { void poll(); }, 5_000);
+    return () => { active = false; controller.abort(); window.clearInterval(timer); };
+  }, [camera.googleDriveFolderUrl, camera.id]);
 
   return <div className={cn("relative aspect-[4/3] overflow-hidden rounded-xl border border-cyan-200/10 bg-[#071725]")}>
-    <Image src={previewImage} alt={`ภาพ Preview จาก ${camera.cameraCode}`} fill sizes={large ? "(max-width: 1280px) 100vw, 420px" : "(max-width: 768px) 100vw, 50vw"} className="object-cover" priority={large} />
+    {previewImage ? <Image src={previewImage} alt={`ภาพ Preview จาก ${camera.cameraCode}`} fill sizes={large ? "(max-width: 1280px) 100vw, 420px" : "(max-width: 768px) 100vw, 50vw"} className="object-cover" priority={large} unoptimized={Boolean(camera.googleDriveFolderUrl)} /> : <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center"><RefreshCw className={cn("size-6 text-cyan-200/60", !driveError && "animate-spin motion-reduce:animate-none")} /><p className="mt-3 text-[10px] text-slate-500">{driveError || "กำลังดึงภาพล่าสุดจาก Google Drive"}</p></div>}
     <div className="absolute inset-0 bg-gradient-to-b from-slate-950/35 via-transparent to-slate-950/70" />
     <div className="absolute inset-x-4 top-4 flex items-center justify-between text-[9px] font-mono uppercase tracking-[.16em] text-cyan-100/70"><span>Snapshot / {camera.cameraCode}</span><span className="flex items-center gap-1.5"><i className={cn("size-1.5 rounded-full", camera.status === "ONLINE" ? "animate-pulse bg-emerald-300" : "bg-amber-300")} />{camera.statusLabel}</span></div>
-    <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3"><div><p className="text-[10px] font-medium text-slate-200">ภาพ snapshot ล่าสุด</p><p className="mt-1 text-[9px] text-slate-500">{camera.latestSnapshot ? formatDateTime(camera.latestSnapshot.capturedAt) : "ยังไม่มีข้อมูลภาพ"}</p></div><span className="rounded-md border border-white/10 bg-slate-950/55 px-2 py-1 text-[9px] text-slate-400">Preview image</span></div>
+    <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-3"><div><p className="text-[10px] font-medium text-slate-200">ภาพ snapshot ล่าสุด</p><p className="mt-1 text-[9px] text-slate-500">{driveSnapshot ? formatDateTime(driveSnapshot.capturedAt) : camera.latestSnapshot ? formatDateTime(camera.latestSnapshot.capturedAt) : "ยังไม่มีข้อมูลภาพ"}</p></div><span className="rounded-md border border-white/10 bg-slate-950/55 px-2 py-1 text-[9px] text-slate-400">{camera.googleDriveFolderUrl ? "Google Drive · 5s" : "Preview image"}</span></div>
   </div>;
 }
 
@@ -69,7 +101,7 @@ function CameraCard({ camera, selected, onSelect }: { camera: CctvOverview["item
 }
 
 function CameraForm({ detail, districts, onSave, onCancel }: { detail?: CctvDetail; districts: CctvOverview["districts"]; onSave: (value: CctvFormValue) => Promise<void>; onCancel: () => void }) {
-  const [form, setForm] = useState<CctvFormValue>({ cameraCode: detail?.cameraCode ?? "", nameTh: detail?.nameTh ?? "", nameEn: detail?.nameEn ?? "", status: detail?.status ?? "OFFLINE", latitude: detail?.latitude?.toString() ?? "", longitude: detail?.longitude?.toString() ?? "", districtId: detail?.district?.id ?? "" });
+  const [form, setForm] = useState<CctvFormValue>({ cameraCode: detail?.cameraCode ?? "", nameTh: detail?.nameTh ?? "", nameEn: detail?.nameEn ?? "", status: detail?.status ?? "OFFLINE", latitude: detail?.latitude?.toString() ?? "", longitude: detail?.longitude?.toString() ?? "", districtId: detail?.district?.id ?? "", googleDriveFolderUrl: detail?.googleDriveFolderUrl ?? "" });
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState("");
 
@@ -80,7 +112,7 @@ function CameraForm({ detail, districts, onSave, onCancel }: { detail?: CctvDeta
     try { await onSave(form); } catch (error) { setActionError(error instanceof Error ? error.message : "บันทึกข้อมูลกล้องไม่สำเร็จ"); } finally { setSaving(false); }
   }
 
-  return <Card className="border-cyan-200/15"><CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm">{detail ? <Edit3 className="size-4 text-cyan-200" /> : <Plus className="size-4 text-cyan-200" />}{detail ? "แก้ไขกล้อง CCTV" : "เพิ่มกล้อง CCTV"}</CardTitle></CardHeader><CardContent><form onSubmit={submit} className="space-y-3"><div className="space-y-1.5"><Label>รหัสกล้อง</Label><Input value={form.cameraCode} onChange={(event) => setForm({ ...form, cameraCode: event.target.value.toUpperCase() })} disabled={Boolean(detail)} required minLength={2} /></div><div className="space-y-1.5"><Label>ชื่อภาษาไทย</Label><Input value={form.nameTh} onChange={(event) => setForm({ ...form, nameTh: event.target.value })} required minLength={2} /></div><div className="space-y-1.5"><Label>ชื่อภาษาอังกฤษ</Label><Input value={form.nameEn} onChange={(event) => setForm({ ...form, nameEn: event.target.value })} /></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label>สถานะ</Label><Select className="w-full" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as CctvStatus })}>{CCTV_STATUSES.map((status) => <option key={status} value={status}>{CCTV_STATUS_LABELS[status]}</option>)}</Select></div><div className="space-y-1.5"><Label>อำเภอ</Label><Select className="w-full" value={form.districtId} onChange={(event) => setForm({ ...form, districtId: event.target.value })}><option value="">ไม่ระบุ</option>{districts.map((district) => <option key={district.id} value={district.id}>{district.nameTh}</option>)}</Select></div></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label>ละติจูด</Label><Input type="number" min="-90" max="90" step="any" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} /></div><div className="space-y-1.5"><Label>ลองจิจูด</Label><Input type="number" min="-180" max="180" step="any" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} /></div></div>{actionError && <p role="alert" className="text-xs text-rose-200">{actionError}</p>}<div className="flex gap-2 pt-1"><Button type="submit" size="sm" className="flex-1" disabled={saving}><Check className="size-3.5" />{saving ? "กำลังบันทึก" : "บันทึก"}</Button><Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}><X className="size-3.5" />ยกเลิก</Button></div></form></CardContent></Card>;
+  return <Card className="border-cyan-200/15"><CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-sm">{detail ? <Edit3 className="size-4 text-cyan-200" /> : <Plus className="size-4 text-cyan-200" />}{detail ? "แก้ไขกล้อง CCTV" : "เพิ่มกล้อง CCTV"}</CardTitle></CardHeader><CardContent><form onSubmit={submit} className="space-y-3"><div className="space-y-1.5"><Label>รหัสกล้อง</Label><Input value={form.cameraCode} onChange={(event) => setForm({ ...form, cameraCode: event.target.value.toUpperCase() })} disabled={Boolean(detail)} required minLength={2} /></div><div className="space-y-1.5"><Label>ชื่อภาษาไทย</Label><Input value={form.nameTh} onChange={(event) => setForm({ ...form, nameTh: event.target.value })} required minLength={2} /></div><div className="space-y-1.5"><Label>ชื่อภาษาอังกฤษ</Label><Input value={form.nameEn} onChange={(event) => setForm({ ...form, nameEn: event.target.value })} /></div><div className="space-y-1.5"><Label>Google Drive folder URL</Label><Input type="url" value={form.googleDriveFolderUrl} onChange={(event) => setForm({ ...form, googleDriveFolderUrl: event.target.value })} placeholder="https://drive.google.com/drive/folders/..." /><p className="text-[10px] leading-5 text-slate-600">แชร์โฟลเดอร์ให้อ่านผ่านลิงก์ และจัดโครงสร้างเป็น ปี / เดือน / วัน / ไฟล์ภาพ</p></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label>สถานะ</Label><Select className="w-full" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as CctvStatus })}>{CCTV_STATUSES.map((status) => <option key={status} value={status}>{CCTV_STATUS_LABELS[status]}</option>)}</Select></div><div className="space-y-1.5"><Label>อำเภอ</Label><Select className="w-full" value={form.districtId} onChange={(event) => setForm({ ...form, districtId: event.target.value })}><option value="">ไม่ระบุ</option>{districts.map((district) => <option key={district.id} value={district.id}>{district.nameTh}</option>)}</Select></div></div><div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label>ละติจูด</Label><Input type="number" min="-90" max="90" step="any" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} /></div><div className="space-y-1.5"><Label>ลองจิจูด</Label><Input type="number" min="-180" max="180" step="any" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} /></div></div>{actionError && <p role="alert" className="text-xs text-rose-200">{actionError}</p>}<div className="flex gap-2 pt-1"><Button type="submit" size="sm" className="flex-1" disabled={saving}><Check className="size-3.5" />{saving ? "กำลังบันทึก" : "บันทึก"}</Button><Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}><X className="size-3.5" />ยกเลิก</Button></div></form></CardContent></Card>;
 }
 
 function DetailPanel({ detail, canManage, districts, onSave, onDelete }: { detail: CctvDetail; canManage: boolean; districts: CctvOverview["districts"]; onSave: (value: CctvFormValue) => Promise<void>; onDelete: () => Promise<void> }) {
@@ -98,7 +130,7 @@ function DetailPanel({ detail, canManage, districts, onSave, onDelete }: { detai
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-mono text-[10px] uppercase tracking-[.16em] text-cyan-200/70">{detail.cameraCode}</p><h3 className="mt-2 truncate text-xl font-semibold text-white">{detail.nameTh}</h3><p className="mt-1 truncate text-xs text-slate-500">{detail.nameEn ?? "CCTV monitoring point"}</p></div><CameraStatus status={detail.status} /></div>
     <SnapshotPreview camera={detail} large />
-    <div className="grid gap-2 sm:grid-cols-2"><InfoCell icon={MapPin} label="พื้นที่" value={[detail.locationName, detail.district?.nameTh, detail.subdistrictName].filter(Boolean).join(" · ") || "ไม่ระบุ"} /><InfoCell icon={ShieldAlert} label="หน่วยงาน" value={detail.agencyName ?? "ไม่ระบุ"} /><InfoCell icon={Clock3} label="Heartbeat ล่าสุด" value={detail.lastHeartbeat ? formatDateTime(detail.lastHeartbeat) : "ไม่พบข้อมูล"} /><InfoCell icon={Activity} label="ภาพล่าสุด" value={detail.lastImageAt ? formatDateTime(detail.lastImageAt) : "ไม่พบข้อมูล"} /></div>
+    <div className="grid gap-2 sm:grid-cols-2"><InfoCell icon={MapPin} label="พื้นที่" value={[detail.locationName, detail.district?.nameTh, detail.subdistrictName].filter(Boolean).join(" · ") || "ไม่ระบุ"} /><InfoCell icon={ShieldAlert} label="หน่วยงาน" value={detail.agencyName ?? "ไม่ระบุ"} /><InfoCell icon={Clock3} label="Heartbeat ล่าสุด" value={detail.lastHeartbeat ? formatDateTime(detail.lastHeartbeat) : "ไม่พบข้อมูล"} /><InfoCell icon={Activity} label="แหล่งภาพ" value={detail.googleDriveFolderUrl ? "Google Drive · refresh 5 วินาที" : "ภาพเดิมของระบบ"} /></div>
     {detail.latitude !== null && detail.longitude !== null && <p className="font-mono text-[10px] text-slate-600">พิกัด {detail.latitude.toFixed(5)}, {detail.longitude.toFixed(5)}</p>}
 
     {canManage && (editing ? <CameraForm detail={detail} districts={districts} onSave={async (value) => { await onSave(value); setEditing(false); }} onCancel={() => setEditing(false)} /> : <Card className="border-cyan-200/10"><CardHeader className="pb-3"><CardTitle className="text-sm">จัดการกล้อง</CardTitle></CardHeader><CardContent className="space-y-3"><div className="grid grid-cols-2 gap-2"><Button variant="outline" size="sm" onClick={() => setEditing(true)}><Edit3 className="size-3.5" />แก้ไข</Button><Button variant="danger" size="sm" onClick={() => void removeCamera()} disabled={removing}><Trash2 className="size-3.5" />{removing ? "กำลังลบ" : "ลบ"}</Button></div>{actionError && <p role="alert" className="text-xs text-rose-200">{actionError}</p>}</CardContent></Card>)}
@@ -189,7 +221,7 @@ export function CctvClient({ initialData, canManage, initialSelectedId = null }:
   }, [initialSelectedId, selectCamera]);
 
   function cameraPayload(value: CctvFormValue, includeCode: boolean) {
-    return { ...(includeCode ? { cameraCode: value.cameraCode.trim() } : {}), nameTh: value.nameTh.trim(), nameEn: value.nameEn.trim(), status: value.status, latitude: value.latitude === "" ? null : Number(value.latitude), longitude: value.longitude === "" ? null : Number(value.longitude), districtId: value.districtId || null };
+    return { ...(includeCode ? { cameraCode: value.cameraCode.trim() } : {}), nameTh: value.nameTh.trim(), nameEn: value.nameEn.trim(), status: value.status, latitude: value.latitude === "" ? null : Number(value.latitude), longitude: value.longitude === "" ? null : Number(value.longitude), districtId: value.districtId || null, googleDriveFolderUrl: value.googleDriveFolderUrl.trim() };
   }
 
   async function updateCamera(value: CctvFormValue) {

@@ -13,6 +13,7 @@ import {
   type CctvStatus,
 } from "@/lib/cctv/types";
 import { decimalToNumber } from "@/lib/utils";
+import { isGoogleDriveFolderUrl } from "@/lib/cctv/google-drive";
 
 export type CctvListOptions = {
   page?: number;
@@ -60,6 +61,7 @@ async function findCctvRows(where: Prisma.CctvCameraWhereInput, page: number, li
       lastHeartbeat: true,
       latitude: true,
       longitude: true,
+      nfsFolderPath: true,
       agency: { select: { nameTh: true } },
       location: { select: { nameTh: true } },
       district: { select: { id: true, nameTh: true } },
@@ -97,6 +99,7 @@ function serializeCamera(camera: CctvRow): CctvCameraSummary {
     locationName: camera.location?.nameTh ?? null,
     district: camera.district,
     subdistrictName: camera.subdistrict?.nameTh ?? null,
+    googleDriveFolderUrl: isGoogleDriveFolderUrl(camera.nfsFolderPath) ? camera.nfsFolderPath : null,
     latestSnapshot: camera.snapshots[0] ? serializeSnapshot(camera.snapshots[0]) : null,
     snapshotCount: camera._count.snapshots,
     aiEventCount: camera._count.aiResults,
@@ -180,6 +183,7 @@ async function findCctvDetailRow(id: string) {
       lastHeartbeat: true,
       latitude: true,
       longitude: true,
+      nfsFolderPath: true,
       agency: { select: { nameTh: true } },
       location: { select: { nameTh: true } },
       district: { select: { id: true, nameTh: true } },
@@ -219,6 +223,7 @@ function serializeDetail(camera: CctvDetailRow): CctvDetail {
     locationName: camera.location?.nameTh ?? null,
     district: camera.district,
     subdistrictName: camera.subdistrict?.nameTh ?? null,
+    googleDriveFolderUrl: isGoogleDriveFolderUrl(camera.nfsFolderPath) ? camera.nfsFolderPath : null,
     latestSnapshot: camera.snapshots[0] ? serializeSnapshot(camera.snapshots[0]) : null,
     snapshotCount: camera._count.snapshots,
     aiEventCount: camera._count.aiResults,

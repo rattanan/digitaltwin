@@ -3,6 +3,7 @@ import { retainSelectedId, sameStringFilters } from "@/lib/client/list-detail-st
 import { createDemoCctvDetail, createDemoCctvOverview } from "@/lib/cctv/demo-data";
 import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
 import { cctvCreateSchema, cctvUpdateSchema } from "@/lib/validations/cctv";
+import { parseGoogleDriveFolderUrl } from "@/lib/cctv/google-drive";
 
 describe("CCTV phase 3 data", () => {
   it("keeps the seeded camera status distribution", () => {
@@ -36,6 +37,15 @@ describe("CCTV phase 3 data", () => {
     expect(cctvUpdateSchema.safeParse({ status: "UNKNOWN" }).success).toBe(false);
     expect(cctvCreateSchema.safeParse({ cameraCode: "CCTV SB 021", nameTh: "กล้องทดสอบ" }).success).toBe(false);
     expect(cctvUpdateSchema.safeParse({ nfsFolderPath: "/mnt/nas" }).success).toBe(false);
+    expect(cctvCreateSchema.safeParse({ cameraCode: "CCTV-SB-021", nameTh: "กล้องทดสอบ", googleDriveFolderUrl: "https://example.com/folder" }).success).toBe(false);
+    expect(cctvCreateSchema.safeParse({ cameraCode: "CCTV-SB-021", nameTh: "กล้องทดสอบ", googleDriveFolderUrl: "https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOp" }).success).toBe(true);
+  });
+
+  it("extracts supported Google Drive folder URLs without enabling polling for seed data", () => {
+    expect(parseGoogleDriveFolderUrl("https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOp?resourcekey=abc123")).toEqual({ id: "1AbCdEfGhIjKlMnOp", resourceKey: "abc123" });
+    expect(parseGoogleDriveFolderUrl("https://drive.google.com/open?id=1AbCdEfGhIjKlMnOp")).toEqual({ id: "1AbCdEfGhIjKlMnOp", resourceKey: null });
+    expect(parseGoogleDriveFolderUrl("https://evil.example/drive/folders/1AbCdEfGhIjKlMnOp")).toBeNull();
+    expect(createDemoCctvOverview().items.every((camera) => camera.googleDriveFolderUrl === null)).toBe(true);
   });
 
   it("keeps a deep-linked camera selected when list data refreshes", () => {
