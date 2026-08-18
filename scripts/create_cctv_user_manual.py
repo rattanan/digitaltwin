@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "CCTV-Google-Drive-User-Guide-TH.docx"
 LOGO = ROOT / "public" / "images" / "nt-logo.png"
 
-FONT = "Thonburi"
+FONT = "Tahoma"
 BLUE = "0072CE"
 CYAN = "21A8F6"
 NAVY = "0B2545"
@@ -94,9 +94,17 @@ def set_table_geometry(table, widths):
 
 def set_font(run, size=None, bold=None, color=None, italic=None, name=FONT):
     run.font.name = name
-    run._element.get_or_add_rPr().rFonts.set(qn("w:ascii"), name)
-    run._element.get_or_add_rPr().rFonts.set(qn("w:hAnsi"), name)
-    run._element.get_or_add_rPr().rFonts.set(qn("w:eastAsia"), name)
+    r_pr = run._element.get_or_add_rPr()
+    r_pr.rFonts.set(qn("w:ascii"), name)
+    r_pr.rFonts.set(qn("w:hAnsi"), name)
+    r_pr.rFonts.set(qn("w:eastAsia"), name)
+    r_pr.rFonts.set(qn("w:cs"), name)
+    if any("\u0e00" <= char <= "\u0e7f" for char in run.text):
+        run.font.complex_script = True
+        language = OxmlElement("w:lang")
+        language.set(qn("w:val"), "th-TH")
+        language.set(qn("w:bidi"), "th-TH")
+        r_pr.append(language)
     if size is not None:
         run.font.size = Pt(size)
     if bold is not None:
@@ -211,6 +219,7 @@ def add_numbering_definition(doc, num_id=41):
     fonts.set(qn("w:ascii"), FONT)
     fonts.set(qn("w:hAnsi"), FONT)
     fonts.set(qn("w:eastAsia"), FONT)
+    fonts.set(qn("w:cs"), FONT)
     r_pr.append(fonts)
     level.append(r_pr)
     abstract.append(level)
@@ -286,6 +295,7 @@ def add_page_number(paragraph):
 
 
 def configure_document(doc):
+    doc.settings.odd_and_even_pages_header_footer = True
     section = doc.sections[0]
     section.page_width = Inches(8.5)
     section.page_height = Inches(11)
@@ -302,6 +312,7 @@ def configure_document(doc):
     normal._element.rPr.rFonts.set(qn("w:ascii"), FONT)
     normal._element.rPr.rFonts.set(qn("w:hAnsi"), FONT)
     normal._element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
+    normal._element.rPr.rFonts.set(qn("w:cs"), FONT)
     normal.font.size = Pt(11)
     normal.font.color.rgb = RGBColor.from_string(INK)
     normal.paragraph_format.space_before = Pt(0)
@@ -319,6 +330,7 @@ def configure_document(doc):
         style._element.rPr.rFonts.set(qn("w:ascii"), FONT)
         style._element.rPr.rFonts.set(qn("w:hAnsi"), FONT)
         style._element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
+        style._element.rPr.rFonts.set(qn("w:cs"), FONT)
         style.font.size = Pt(size)
         style.font.bold = True
         style.font.color.rgb = RGBColor.from_string(color)
@@ -362,8 +374,8 @@ def build_document():
         logo_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         logo_p.paragraph_format.space_after = Pt(24)
         logo = logo_p.add_run().add_picture(str(LOGO), width=Inches(1.55))
-        logo._inline.docPr.set("descr", "National Telecom company logo")
-        logo._inline.docPr.set("title", "National Telecom logo")
+        logo._inline.docPr.set("descr", "โลโก้ NT National Telecom")
+        logo._inline.docPr.set("title", "NT National Telecom")
     add_text(doc, "สร้างกล้อง CCTV", bold=True, color=NAVY, size=28, after=5, align=WD_ALIGN_PARAGRAPH.CENTER)
     add_text(doc, "และเชื่อมต่อภาพจาก Google Drive", bold=True, color=BLUE, size=20, after=18, align=WD_ALIGN_PARAGRAPH.CENTER)
     add_text(doc, "สำหรับผู้ใช้งานระบบ Digital Twin", color=MUTED, size=12, after=48, align=WD_ALIGN_PARAGRAPH.CENTER)
