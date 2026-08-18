@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDemoIotDetail, createDemoIotOverview } from "@/lib/iot/demo-data";
-import { iotReadingSchema, iotUpdateSchema } from "@/lib/validations/iot";
+import { iotCreateSchema, iotReadingSchema, iotUpdateSchema } from "@/lib/validations/iot";
 
 describe("IoT phase 4 data", () => {
   it("keeps the seeded device and status distribution", () => {
@@ -22,8 +22,10 @@ describe("IoT phase 4 data", () => {
   });
 
   it("validates status updates and idempotent readings", () => {
+    expect(iotCreateSchema.parse({ deviceCode: "WATER-SB-041", nameTh: "เซนเซอร์ทดสอบ", typeId: "type-water" })).toMatchObject({ status: "OFFLINE" });
     expect(iotUpdateSchema.parse({ status: "DEGRADED" })).toMatchObject({ status: "DEGRADED" });
-    expect(iotUpdateSchema.safeParse({ battery: 10 }).success).toBe(false);
+    expect(iotUpdateSchema.parse({ battery: 10 })).toMatchObject({ battery: 10 });
+    expect(iotUpdateSchema.safeParse({ battery: 101 }).success).toBe(false);
     expect(iotReadingSchema.parse({ deviceId: "WATER-SB-001", metricKey: "waterLevel", value: 12.5, idempotencyKey: "reading-1" })).toMatchObject({ value: 12.5 });
     expect(iotReadingSchema.safeParse({ deviceId: "WATER-SB-001", metricKey: "waterLevel", value: Number.NaN }).success).toBe(false);
   });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { retainSelectedId, sameStringFilters } from "@/lib/client/list-detail-state";
 import { createDemoCctvDetail, createDemoCctvOverview } from "@/lib/cctv/demo-data";
 import { getCctvPreviewImage } from "@/lib/cctv/preview-images";
-import { cctvUpdateSchema } from "@/lib/validations/cctv";
+import { cctvCreateSchema, cctvUpdateSchema } from "@/lib/validations/cctv";
 
 describe("CCTV phase 3 data", () => {
   it("keeps the seeded camera status distribution", () => {
@@ -31,8 +31,10 @@ describe("CCTV phase 3 data", () => {
   });
 
   it("only accepts safe camera metadata updates", () => {
+    expect(cctvCreateSchema.parse({ cameraCode: "CCTV-SB-021", nameTh: "กล้องทดสอบ" })).toMatchObject({ status: "OFFLINE" });
     expect(cctvUpdateSchema.parse({ status: "DEGRADED", latitude: 14.89, longitude: 100.4 })).toMatchObject({ status: "DEGRADED" });
     expect(cctvUpdateSchema.safeParse({ status: "UNKNOWN" }).success).toBe(false);
+    expect(cctvCreateSchema.safeParse({ cameraCode: "CCTV SB 021", nameTh: "กล้องทดสอบ" }).success).toBe(false);
     expect(cctvUpdateSchema.safeParse({ nfsFolderPath: "/mnt/nas" }).success).toBe(false);
   });
 

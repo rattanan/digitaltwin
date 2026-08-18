@@ -33,11 +33,20 @@ export async function PATCH(request: Request, context: IotContext) {
     const existing = await findDevice(id);
     if (!existing) throw new ApiError("ไม่พบอุปกรณ์ IoT", 404);
     const input = await parseBody(request, iotUpdateSchema);
+    const [type, district] = await Promise.all([
+      input.typeId ? prisma.iotDeviceType.findUnique({ where: { id: input.typeId }, select: { id: true } }) : null,
+      input.districtId ? prisma.district.findFirst({ where: { id: input.districtId, deletedAt: null }, select: { id: true, provinceId: true } }) : null,
+    ]);
+    if (input.typeId && !type) throw new ApiError("ไม่พบชนิดอุปกรณ์ที่เลือก", 422);
+    if (input.districtId && !district) throw new ApiError("ไม่พบอำเภอที่เลือก", 422);
     const device = await prisma.iotDevice.update({
       where: { id: existing.id },
       data: {
         ...(input.nameTh !== undefined ? { nameTh: input.nameTh } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.typeId !== undefined ? { typeId: type!.id } : {}),
+        ...(input.battery !== undefined ? { battery: input.battery } : {}),
+        ...(input.districtId !== undefined ? { districtId: district?.id ?? null, ...(district ? { provinceId: district.provinceId } : {}) } : {}),
       },
     });
     await writeAuditLog({ actorId: auth.user.id, action: "UPDATE", module: "iot", entityType: "device", entityId: existing.id, beforeData: { deviceCode: existing.deviceCode, nameTh: existing.nameTh, status: existing.status }, afterData: { deviceCode: device.deviceCode, nameTh: device.nameTh, status: device.status } });

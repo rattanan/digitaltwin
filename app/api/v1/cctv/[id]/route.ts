@@ -33,6 +33,10 @@ export async function PATCH(request: Request, context: CctvContext) {
     const existing = await findCamera(id);
     if (!existing) throw new ApiError("ไม่พบกล้อง CCTV", 404);
     const input = await parseBody(request, cctvUpdateSchema);
+    const district = input.districtId
+      ? await prisma.district.findFirst({ where: { id: input.districtId, deletedAt: null }, select: { id: true, provinceId: true } })
+      : null;
+    if (input.districtId && !district) throw new ApiError("ไม่พบอำเภอที่เลือก", 422);
     const camera = await prisma.cctvCamera.update({
       where: { id: existing.id },
       data: {
@@ -41,6 +45,7 @@ export async function PATCH(request: Request, context: CctvContext) {
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.latitude !== undefined ? { latitude: input.latitude } : {}),
         ...(input.longitude !== undefined ? { longitude: input.longitude } : {}),
+        ...(input.districtId !== undefined ? { districtId: district?.id ?? null, ...(district ? { provinceId: district.provinceId } : {}) } : {}),
       },
     });
     await writeAuditLog({
