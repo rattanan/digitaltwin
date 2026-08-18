@@ -145,6 +145,8 @@ tests                      unit tests for foundation contracts
 
 อุปกรณ์ IoT เรียก endpoint เดียวกันได้โดยตั้ง `IOT_INGEST_API_KEY` เป็นค่าสุ่มยาวอย่างน้อย 32 ตัวอักษร แล้วส่ง header `Authorization: Bearer <API_KEY>` พร้อม JSON ต่อไปนี้ (ใช้ `deviceCode`, public ID หรือ internal ID ใน `deviceId` ได้):
 
+ดูขั้นตอนลงทะเบียนอุปกรณ์ กำหนด metric การ retry และ error codes ฉบับเต็มได้ที่ [คู่มือเพิ่มอุปกรณ์ IoT และเชื่อมต่อ Telemetry API](docs/iot-device-integration-guide.md) หรือ import [OpenAPI 3.1 specification](docs/openapi/iot-v1.yaml) เข้า Swagger/Postman
+
 ```bash
 curl -X POST http://localhost:3000/api/v1/iot/readings \
   -H 'Content-Type: application/json' \

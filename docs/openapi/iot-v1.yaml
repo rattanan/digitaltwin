@@ -1,0 +1,412 @@
+openapi: 3.1.0
+info:
+  title: Digital Twin IoT API
+  version: 1.0.0
+  description: API สำหรับจัดการอุปกรณ์ IoT และรับ telemetry เข้าสู่ Digital Twin
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: IoT Devices
+  - name: IoT Telemetry
+paths:
+  /api/v1/iot:
+    get:
+      tags: [IoT Devices]
+      summary: รายการและสรุปอุปกรณ์ IoT
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/IotStatus' }
+        - name: typeId
+          in: query
+          schema: { type: string }
+        - name: districtId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IotListResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [IoT Devices]
+      summary: ลงทะเบียนอุปกรณ์ IoT
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIotDeviceRequest'
+      responses:
+        '201':
+          description: สร้างอุปกรณ์สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IotDeviceResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/iot/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Internal ID หรือ public ID ของอุปกรณ์
+        schema: { type: string }
+    get:
+      tags: [IoT Devices]
+      summary: ดูรายละเอียดอุปกรณ์ metrics และ readings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IotDeviceResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [IoT Devices]
+      summary: แก้ไขอุปกรณ์ IoT
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIotDeviceRequest'
+      responses:
+        '200':
+          description: แก้ไขสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IotDeviceResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [IoT Devices]
+      summary: Soft-delete อุปกรณ์ IoT
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: ลบสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteIotDeviceResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/iot/readings:
+    post:
+      tags: [IoT Telemetry]
+      summary: บันทึก telemetry หนึ่ง metric
+      description: ใช้ Bearer IoT API key สำหรับอุปกรณ์ หรือ session ที่มีสิทธิ์ iot.manage
+      security:
+        - iotApiKey: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIotReadingRequest'
+            examples:
+              waterLevel:
+                value:
+                  deviceId: WATER-SB-041
+                  metricKey: waterLevel
+                  value: 12.48
+                  unit: เมตร
+                  recordedAt: '2026-08-18T19:00:00+07:00'
+                  idempotencyKey: WATER-SB-041:waterLevel:20260818T190000+0700
+      responses:
+        '201':
+          description: บันทึก reading ใหม่สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IotReadingResponse'
+        '200':
+          description: พบ idempotency key เดิมและคืน reading เดิม โดย duplicate เป็น true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IotReadingResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  securitySchemes:
+    iotApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+      description: ค่าจาก environment variable IOT_INGEST_API_KEY
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: dt_access
+      description: Session cookie ที่ได้รับจาก POST /api/v1/auth/login
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    BadRequest:
+      description: Request หรือ JSON ไม่ถูกต้อง
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Authentication ไม่ถูกต้อง
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: ไม่มี permission
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: ไม่พบ resource
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: ข้อมูลซ้ำหรือขัดแย้ง
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ValidationError:
+      description: Validation ไม่ผ่าน
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unavailable:
+      description: ระบบหรือ configuration ยังไม่พร้อม
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    IotStatus:
+      type: string
+      enum: [ONLINE, OFFLINE, MAINTENANCE, DEGRADED]
+    CreateIotDeviceRequest:
+      type: object
+      additionalProperties: false
+      required: [deviceCode, nameTh, typeId]
+      properties:
+        deviceCode:
+          type: string
+          minLength: 2
+          maxLength: 80
+          pattern: '^[A-Za-z0-9._-]+$'
+        nameTh:
+          type: string
+          minLength: 2
+          maxLength: 191
+        status:
+          $ref: '#/components/schemas/IotStatus'
+        typeId:
+          type: string
+          minLength: 1
+          maxLength: 80
+        battery:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 100
+        districtId:
+          type: [string, 'null']
+          maxLength: 80
+    UpdateIotDeviceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        nameTh:
+          type: string
+          minLength: 2
+          maxLength: 191
+        status:
+          $ref: '#/components/schemas/IotStatus'
+        typeId:
+          type: string
+          minLength: 1
+          maxLength: 80
+        battery:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 100
+        districtId:
+          type: [string, 'null']
+          maxLength: 80
+    CreateIotReadingRequest:
+      type: object
+      additionalProperties: false
+      required: [deviceId, metricKey, value]
+      properties:
+        deviceId:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: Internal ID, public ID หรือ deviceCode
+        metricKey:
+          type: string
+          minLength: 1
+          maxLength: 80
+        value:
+          type: number
+        unit:
+          type: string
+          maxLength: 40
+        recordedAt:
+          type: string
+          format: date-time
+        idempotencyKey:
+          type: string
+          maxLength: 191
+          description: ต้องไม่ซ้ำทั้งระบบ
+    ApiMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        requestId: { type: string, format: uuid }
+    IotReading:
+      type: object
+      required: [id, deviceId, metricKey, value, recordedAt, duplicate]
+      properties:
+        id: { type: string }
+        deviceId: { type: string }
+        metricKey: { type: string }
+        value: { type: number }
+        unit: { type: [string, 'null'] }
+        recordedAt: { type: string, format: date-time }
+        duplicate: { type: boolean }
+    IotDevice:
+      type: object
+      additionalProperties: true
+      required: [id, publicId, deviceCode]
+      properties:
+        id: { type: string }
+        publicId: { type: string }
+        deviceCode: { type: string }
+        nameTh: { type: string }
+        status: { $ref: '#/components/schemas/IotStatus' }
+        battery: { type: [number, 'null'] }
+        lastHeartbeat: { type: [string, 'null'], format: date-time }
+        metrics:
+          type: array
+          items: { type: object, additionalProperties: true }
+        readings:
+          type: array
+          items: { type: object, additionalProperties: true }
+    IotReadingResponse:
+      type: object
+      required: [success, data, message]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/IotReading' }
+        message: { type: 'null' }
+        meta: { $ref: '#/components/schemas/ApiMeta' }
+    IotDeviceResponse:
+      type: object
+      required: [success, data, message]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/IotDevice' }
+        message: { type: 'null' }
+        meta: { $ref: '#/components/schemas/ApiMeta' }
+    DeleteIotDeviceResponse:
+      type: object
+      required: [success, data, message]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          required: [deleted]
+          properties:
+            deleted: { type: boolean, const: true }
+        message: { type: 'null' }
+    IotListResponse:
+      type: object
+      required: [success, data, message, meta]
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          additionalProperties: true
+          required: [items, summary, types, districts]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/IotDevice' }
+            summary: { type: object, additionalProperties: true }
+            types:
+              type: array
+              items: { type: object, additionalProperties: true }
+            districts:
+              type: array
+              items: { type: object, additionalProperties: true }
+        message: { type: 'null' }
+        meta: { $ref: '#/components/schemas/ApiMeta' }
+    ErrorItem:
+      type: object
+      properties:
+        field: { type: string }
+        message: { type: string }
+      required: [message]
+    ErrorResponse:
+      type: object
+      required: [success, data, message, errors]
+      properties:
+        success: { type: boolean, const: false }
+        data: { type: 'null' }
+        message: { type: string }
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/ErrorItem' }
+        meta: { $ref: '#/components/schemas/ApiMeta' }
