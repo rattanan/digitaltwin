@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "CCTV-Google-Drive-User-Guide-TH.docx"
 LOGO = ROOT / "public" / "images" / "nt-logo.png"
 
-FONT = "Tahoma"
+FONT = "Thonburi"
 BLUE = "0072CE"
 CYAN = "21A8F6"
 NAVY = "0B2545"
@@ -169,7 +169,7 @@ def add_callout(doc, label, text, tone="blue"):
 
 def add_numbering_definition(doc, num_id=41):
     numbering = doc.part.numbering_part.element
-    abstract_id = 41
+    abstract_id = num_id
     abstract = OxmlElement("w:abstractNum")
     abstract.set(qn("w:abstractNumId"), str(abstract_id))
     multi = OxmlElement("w:multiLevelType")
@@ -327,30 +327,33 @@ def configure_document(doc):
         style.paragraph_format.keep_with_next = True
         style.paragraph_format.keep_together = True
 
-    header = section.header
-    hp = header.paragraphs[0]
-    hp.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    set_paragraph_spacing(hp, after=0, line=1.0)
-    set_font(hp.add_run("คู่มือผู้ใช้งาน  •  Digital Twin CCTV"), size=8.5, bold=True, color=MUTED)
-    p_pr = hp._p.get_or_add_pPr()
-    borders = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), "4")
-    bottom.set(qn("w:space"), "4")
-    bottom.set(qn("w:color"), BORDER)
-    borders.append(bottom)
-    p_pr.append(borders)
+    for header in (section.header, section.even_page_header):
+        hp = header.paragraphs[0]
+        hp.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        set_paragraph_spacing(hp, after=0, line=1.0)
+        set_font(hp.add_run("คู่มือผู้ใช้งาน  •  Digital Twin CCTV"), size=8.5, bold=True, color=MUTED)
+        p_pr = hp._p.get_or_add_pPr()
+        borders = OxmlElement("w:pBdr")
+        bottom = OxmlElement("w:bottom")
+        bottom.set(qn("w:val"), "single")
+        bottom.set(qn("w:sz"), "4")
+        bottom.set(qn("w:space"), "4")
+        bottom.set(qn("w:color"), BORDER)
+        borders.append(bottom)
+        p_pr.append(borders)
 
-    footer = section.footer
-    fp = footer.paragraphs[0]
-    add_page_number(fp)
+    for footer in (section.footer, section.even_page_footer):
+        add_page_number(footer.paragraphs[0])
 
 
 def build_document():
     doc = Document()
     configure_document(doc)
-    num_id = add_numbering_definition(doc)
+    prepare_num_id = add_numbering_definition(doc, 41)
+    share_num_id = add_numbering_definition(doc, 42)
+    create_num_id = add_numbering_definition(doc, 43)
+    verify_num_id = add_numbering_definition(doc, 44)
+    edit_num_id = add_numbering_definition(doc, 45)
 
     # Cover: editorial_cover pattern, adapted to the Digital Twin brand.
     add_text(doc, "คู่มือการใช้งาน", bold=True, color=BLUE, size=10, after=18, align=WD_ALIGN_PARAGRAPH.CENTER)
@@ -358,7 +361,9 @@ def build_document():
         logo_p = doc.add_paragraph()
         logo_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         logo_p.paragraph_format.space_after = Pt(24)
-        logo_p.add_run().add_picture(str(LOGO), width=Inches(1.55))
+        logo = logo_p.add_run().add_picture(str(LOGO), width=Inches(1.55))
+        logo._inline.docPr.set("descr", "National Telecom company logo")
+        logo._inline.docPr.set("title", "National Telecom logo")
     add_text(doc, "สร้างกล้อง CCTV", bold=True, color=NAVY, size=28, after=5, align=WD_ALIGN_PARAGRAPH.CENTER)
     add_text(doc, "และเชื่อมต่อภาพจาก Google Drive", bold=True, color=BLUE, size=20, after=18, align=WD_ALIGN_PARAGRAPH.CENTER)
     add_text(doc, "สำหรับผู้ใช้งานระบบ Digital Twin", color=MUTED, size=12, after=48, align=WD_ALIGN_PARAGRAPH.CENTER)
@@ -369,9 +374,9 @@ def build_document():
     add_heading(doc, "1. ก่อนเริ่มใช้งาน", 1)
     add_text(doc, "คู่มือนี้ใช้สำหรับผู้ที่มีสิทธิ์จัดการกล้อง CCTV ในระบบ หากไม่พบปุ่ม “เพิ่มกล้อง” ให้ติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์ cctv.manage")
     add_heading(doc, "สิ่งที่ต้องเตรียม", 2)
-    add_step(doc, num_id, "ข้อมูลกล้อง", "รหัสกล้อง ชื่อ สถานะ อำเภอ และพิกัด (ถ้ามี)")
-    add_step(doc, num_id, "Google Drive root folder", "หนึ่งโฟลเดอร์หลักต่อกล้อง พร้อมโครงสร้าง ปี/เดือน/วัน")
-    add_step(doc, num_id, "สิทธิ์ดูผ่านลิงก์", "ตั้งค่า root folder เป็น Anyone with the link และบทบาท Viewer")
+    add_step(doc, prepare_num_id, "ข้อมูลกล้อง", "รหัสกล้อง ชื่อ สถานะ อำเภอ และพิกัด (ถ้ามี)")
+    add_step(doc, prepare_num_id, "Google Drive root folder", "หนึ่งโฟลเดอร์หลักต่อกล้อง พร้อมโครงสร้าง ปี/เดือน/วัน")
+    add_step(doc, prepare_num_id, "สิทธิ์ดูผ่านลิงก์", "ตั้งค่า root folder เป็น Anyone with the link และบทบาท Viewer")
     add_callout(doc, "ผู้ใช้ไม่ต้องมี API Key", "Google Drive API Key เป็นค่าที่ผู้ดูแลระบบตั้งไว้บนเซิร์ฟเวอร์ ผู้ใช้เพียงเตรียมโฟลเดอร์และวาง URL ในฟอร์มกล้อง", "yellow")
 
     add_heading(doc, "2. เตรียม Google Drive folder", 1)
@@ -397,19 +402,19 @@ def build_document():
     add_callout(doc, "รูปแบบชื่อโฟลเดอร์", "ปีต้องเป็นตัวเลข 4 หลัก เช่น 2026 หรือ 2569 ส่วนเดือนและวันใช้ 8 หรือ 08 ได้ ระบบจะเรียงวันที่ล่าสุดและเลือกไฟล์ชนิดภาพที่แก้ไขล่าสุด", "gray")
 
     add_heading(doc, "2.2 แชร์โฟลเดอร์และคัดลอก URL", 2)
-    add_step(doc, num_id, "คลิกขวาที่ root folder", "เลือก Share หรือแชร์")
-    add_step(doc, num_id, "เปลี่ยน General access", "เลือก Anyone with the link และกำหนดบทบาท Viewer")
-    add_step(doc, num_id, "กด Copy link", "URL ที่ได้ควรมีรูปแบบ https://drive.google.com/drive/folders/…")
+    add_step(doc, share_num_id, "คลิกขวาที่ root folder", "เลือก Share หรือแชร์")
+    add_step(doc, share_num_id, "เปลี่ยน General access", "เลือก Anyone with the link และกำหนดบทบาท Viewer")
+    add_step(doc, share_num_id, "กด Copy link", "URL ที่ได้ควรมีรูปแบบ https://drive.google.com/drive/folders/…")
     add_callout(doc, "สำคัญ", "ใส่ URL ของ root folder ประจำกล้องเท่านั้น ไม่ใช้ URL ของไฟล์ภาพ โฟลเดอร์ปี โฟลเดอร์เดือน หรือโฟลเดอร์วัน", "yellow")
 
     doc.add_page_break()
     add_heading(doc, "3. สร้างกล้องในระบบ", 1)
-    add_step(doc, num_id, "เข้าสู่ระบบ Digital Twin", "ใช้บัญชีที่มีสิทธิ์จัดการกล้อง")
-    add_step(doc, num_id, "เปิดเมนู CCTV", "เข้าสู่หน้าศูนย์ควบคุม CCTV")
-    add_step(doc, num_id, "กดปุ่ม “เพิ่มกล้อง”", "ฟอร์มเพิ่มกล้องจะแสดงในแผงรายละเอียด")
-    add_step(doc, num_id, "กรอกข้อมูลกล้อง", "ตรวจสอบรหัสกล้องและชื่อให้ตรงกับหน้างาน")
-    add_step(doc, num_id, "วาง Google Drive folder URL", "ใช้ URL ของ root folder ที่คัดลอกไว้")
-    add_step(doc, num_id, "กด “บันทึก”", "ระบบตรวจสอบรูปแบบ URL และสร้างกล้อง")
+    add_step(doc, create_num_id, "เข้าสู่ระบบ Digital Twin", "ใช้บัญชีที่มีสิทธิ์จัดการกล้อง")
+    add_step(doc, create_num_id, "เปิดเมนู CCTV", "เข้าสู่หน้าศูนย์ควบคุม CCTV")
+    add_step(doc, create_num_id, "กดปุ่ม “เพิ่มกล้อง”", "ฟอร์มเพิ่มกล้องจะแสดงในแผงรายละเอียด")
+    add_step(doc, create_num_id, "กรอกข้อมูลกล้อง", "ตรวจสอบรหัสกล้องและชื่อให้ตรงกับหน้างาน")
+    add_step(doc, create_num_id, "วาง Google Drive folder URL", "ใช้ URL ของ root folder ที่คัดลอกไว้")
+    add_step(doc, create_num_id, "กด “บันทึก”", "ระบบตรวจสอบรูปแบบ URL และสร้างกล้อง")
 
     add_heading(doc, "ข้อมูลในฟอร์ม", 2)
     add_table(doc,
@@ -423,22 +428,23 @@ def build_document():
             ("อำเภอ", "ไม่", "เมืองสิงห์บุรี", "ช่วยค้นหาและกรองกล้องตามพื้นที่"),
             ("ละติจูด/ลองจิจูด", "ไม่", "14.8912 / 100.4012", "ใช้แสดงตำแหน่งกล้องบนแผนที่"),
         ],
-        [1700, 800, 2750, 4110],
+        [1600, 1100, 2600, 4060],
     )
     add_callout(doc, "กล้องเดิมจาก seed data", "กล้องสาธิตเดิมยังคงใช้ภาพเดิมของระบบ และจะไม่ดึงภาพจาก Google Drive จนกว่าจะมีการระบุ Google Drive URL ให้กล้องนั้น", "blue")
 
+    doc.add_page_break()
     add_heading(doc, "4. ตรวจสอบว่าภาพทำงาน", 1)
-    add_step(doc, num_id, "ค้นหากล้องที่เพิ่งสร้าง", "ดูจากรหัสหรือชื่อกล้อง")
-    add_step(doc, num_id, "ตรวจป้ายใต้ภาพ", "ควรแสดง “Google Drive · 5s”")
-    add_step(doc, num_id, "รอการดึงภาพครั้งแรก", "ระบบจะแสดงภาพที่แก้ไขล่าสุดจากวันที่ล่าสุด")
-    add_step(doc, num_id, "ทดสอบอัปเดต", "เพิ่มภาพใหม่ในโฟลเดอร์วันปัจจุบัน แล้วรอประมาณ 5 วินาที")
+    add_step(doc, verify_num_id, "ค้นหากล้องที่เพิ่งสร้าง", "ดูจากรหัสหรือชื่อกล้อง")
+    add_step(doc, verify_num_id, "ตรวจป้ายใต้ภาพ", "ควรแสดง “Google Drive · 5s”")
+    add_step(doc, verify_num_id, "รอการดึงภาพครั้งแรก", "ระบบจะแสดงภาพที่แก้ไขล่าสุดจากวันที่ล่าสุด")
+    add_step(doc, verify_num_id, "ทดสอบอัปเดต", "เพิ่มภาพใหม่ในโฟลเดอร์วันปัจจุบัน แล้วรอประมาณ 5 วินาที")
     add_callout(doc, "พฤติกรรมการรีเฟรช", "ระบบรีเฟรชเฉพาะรูปของกล้องที่มี Google Drive URL ไม่โหลดหน้าใหม่ ไม่เปลี่ยนตัวกรอง และไม่รบกวนกล้องอื่น", "blue")
 
     add_heading(doc, "5. แก้ไขหรือเปลี่ยน URL", 1)
-    add_step(doc, num_id, "เลือกกล้องจากรายการ", "เปิดรายละเอียดกล้องทางด้านขวา")
-    add_step(doc, num_id, "ไปที่จัดการกล้อง", "กด “แก้ไข”")
-    add_step(doc, num_id, "แก้ไข Google Drive folder URL", "วาง URL ใหม่ หรือเว้นว่างเพื่อตัดการเชื่อมต่อ Drive")
-    add_step(doc, num_id, "กด “บันทึก”", "ตรวจป้ายแหล่งภาพหลังบันทึก")
+    add_step(doc, edit_num_id, "เลือกกล้องจากรายการ", "เปิดรายละเอียดกล้องทางด้านขวา")
+    add_step(doc, edit_num_id, "ไปที่จัดการกล้อง", "กด “แก้ไข”")
+    add_step(doc, edit_num_id, "แก้ไข Google Drive folder URL", "วาง URL ใหม่ หรือเว้นว่างเพื่อตัดการเชื่อมต่อ Drive")
+    add_step(doc, edit_num_id, "กด “บันทึก”", "ตรวจป้ายแหล่งภาพหลังบันทึก")
 
     doc.add_page_break()
     add_heading(doc, "6. การแก้ไขปัญหาเบื้องต้น", 1)
